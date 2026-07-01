@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="CallbackReceiver/CallbackReceiver.csproj" />
+  <Project Path="ReminderService/ReminderService.csproj" />
+</Solution>

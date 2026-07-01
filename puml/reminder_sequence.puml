@@ -1,0 +1,37 @@
+@startuml
+title Reminder Send and Delivery Confirmation - Sequence Diagram
+
+actor "SQL Agent\nScheduler" as Sched
+participant "Reminder Service" as Service
+participant "Own DB\n(Appointments)" as OwnDB
+participant "easysms.gr API" as API
+participant "Webhook Receiver" as Webhook
+participant "Own DB\n(NotificationLog)" as Log
+actor "Patient" as Patient
+
+Sched -> Service : trigger (every 15 min)
+Service -> OwnDB : SELECT appointments\nwhere reminder due
+OwnDB --> Service : list of appointments
+
+loop for each appointment
+  Service -> API : api/mobile/check(phone)
+  API --> Service : number type (mobile/landline)
+
+  alt Viber available
+    Service -> API : api/viber/send(msg, callback_url)
+  else fallback
+    Service -> API : api/sms/send(msg, callback_url)
+  end
+
+  API --> Service : msgid, initial status
+  Service -> Log : INSERT NotificationLog\n(msgid, sent_at, channel, status=pending)
+
+  API -> Patient : deliver SMS/Viber message
+end
+
+API -> Webhook : GET /api/sms-callback?\nmsgid&status&cost&to&mcc&mnc
+Webhook -> Log : UPDATE NotificationLog\nSET status, delivered_at, cost\nWHERE msgid = ?
+Log --> Webhook : ack
+Webhook --> API : 200 OK
+
+@enduml

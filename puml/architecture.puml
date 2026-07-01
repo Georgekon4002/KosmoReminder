@@ -1,0 +1,54 @@
+@startuml
+title Appointment Reminder System - High Level Architecture
+
+skinparam componentStyle rectangle
+
+package "Infomed Slis Server (MS SQL Server)" {
+  [Slis Database] as SlisDB
+  [Change Tracking] as CT
+}
+
+package "Sync Layer" {
+  [Linked Server Connection] as LS
+  [SQL Server Agent Job: Sync] as SyncJob
+}
+
+package "Own Operational DB (MS SQL Server)" {
+  [Appointments Table]
+  [PatientContacts Table]
+  [NotificationLog Table]
+  [SyncState Table]
+}
+
+package "Reminder Service" {
+  [SQL Server Agent Job: Reminder Sender] as ReminderJob
+  [easysms.gr API Client]
+}
+
+package "Webhook Receiver (ASP.NET Core)" {
+  [POST /api/sms-callback]
+}
+
+cloud "easysms.gr API" {
+  [api/mobile/check]
+  [api/sms/send]
+  [api/viber/send]
+}
+
+SlisDB --> CT : enables
+CT --> LS : exposes changes via CHANGETABLE
+LS --> SyncJob : queried by
+SyncJob --> [Appointments Table] : MERGE / upsert
+SyncJob --> [SyncState Table] : reads/writes last version
+
+[Appointments Table] --> ReminderJob : reads pending appointments
+ReminderJob --> [api/mobile/check] : validate number
+ReminderJob --> [api/viber/send] : send Viber
+ReminderJob --> [api/sms/send] : fallback SMS
+ReminderJob --> [NotificationLog Table] : log sent status
+
+[api/sms/send] --> [POST /api/sms-callback] : delivery report callback
+[api/viber/send] --> [POST /api/sms-callback] : delivery report callback
+[POST /api/sms-callback] --> [NotificationLog Table] : update delivery status
+
+@enduml

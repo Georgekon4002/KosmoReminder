@@ -1,0 +1,30 @@
+@startuml
+title Slis to Own DB Sync - Sequence Diagram
+
+actor "SQL Agent\nScheduler" as Sched
+participant "Sync Job\n(Stored Procedure)" as Sync
+participant "Linked Server" as LS
+participant "Slis DB\n(Change Tracking)" as Slis
+participant "Own DB\n(SyncState)" as State
+participant "Own DB\n(Appointments)" as Own
+
+Sched -> Sync : trigger (every 5-15 min)
+Sync -> State : SELECT last_sync_version
+State --> Sync : last_version
+
+Sync -> LS : CHANGETABLE(CHANGES Appointments, last_version)
+LS -> Slis : query changed rows since last_version
+Slis --> LS : changed rows (I/U/D)
+LS --> Sync : changed rows
+
+alt rows found
+  Sync -> Own : MERGE INTO Appointments\nUSING changed rows
+  Own --> Sync : rows affected
+  Sync -> State : UPDATE last_sync_version = new_version
+else no changes
+  Sync -> Sync : no-op
+end
+
+Sync -> Sync : INSERT SyncLog\n(timestamp, rows, status)
+
+@enduml

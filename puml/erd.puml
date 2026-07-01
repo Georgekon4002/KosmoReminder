@@ -1,0 +1,57 @@
+@startuml
+title Own Operational DB - Entity Relationship Diagram
+
+entity "Appointments" {
+  * AppointmentID : int <<PK>>
+  --
+  SlisAppointmentID : int
+  PatientID : int <<FK>>
+  AppointmentDateTime : datetime
+  ExamType : varchar
+  Status : varchar
+  LastSyncedAt : datetime
+}
+
+entity "PatientContacts" {
+  * PatientID : int <<PK>>
+  --
+  FullName : varchar
+  PhoneNumber : varchar
+  PreferredChannel : varchar
+}
+
+entity "NotificationLog" {
+  * NotificationID : int <<PK>>
+  --
+  AppointmentID : int <<FK>>
+  MessageID : varchar
+  Channel : varchar
+  SentAt : datetime
+  Status : varchar
+  DeliveredAt : datetime
+  Cost : decimal
+  MCC : varchar
+  MNC : varchar
+}
+
+entity "SyncState" {
+  * SyncID : int <<PK>>
+  --
+  TableName : varchar
+  LastChangeVersion : bigint
+  LastRunAt : datetime
+}
+
+entity "SyncLog" {
+  * LogID : int <<PK>>
+  --
+  RunAt : datetime
+  RowsProcessed : int
+  Status : varchar
+  ErrorMessage : varchar
+}
+
+Appointments }--|| PatientContacts : belongs to
+NotificationLog }--|| Appointments : confirms
+
+@enduml

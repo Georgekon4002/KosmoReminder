@@ -1,0 +1,36 @@
+## .NET build artifacts
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+*.cache
+*.docuser
+launchSettings.json
+
+## NuGet
+*.nupkg
+**/packages/
+
+## IDE
+.idea/
+*.swp
+*~
+
+## OS files
+Thumbs.db
+.DS_Store
+
+## Secrets — NEVER commit these
+appsettings.Development.json
+appsettings.*.local.json
+.env
+*.pfx
+*.key
+
+## Logs
+logs/
+*.log
