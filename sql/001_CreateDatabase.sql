@@ -21,36 +21,16 @@ USE [KosmoSMS];
 GO
 
 -- ============================================================================
--- 2. Doctors
--- ============================================================================
-
-
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Doctors]') AND type = 'U')
-BEGIN
-    CREATE TABLE [dbo].[Doctors] (
-        [DocID]      INT            NOT NULL,
-        [FirstName]  NVARCHAR(100)  NOT NULL,
-        [LastName]   NVARCHAR(100)  NOT NULL,
-        [Expertise]  NVARCHAR(200)  NULL,
-
-        CONSTRAINT [PK_Doctors] PRIMARY KEY CLUSTERED ([DocID])
-    );
-
-PRINT 'Table [Doctors] created.';
-
-END
-
--- ============================================================================
--- 3. Labs
+-- 2. Labs
 -- ============================================================================
 
 
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Labs]') AND type = 'U')
 BEGIN
     CREATE TABLE [dbo].[Labs] (
-        [LabID]           INT            NOT NULL,
-        [LabName]         NVARCHAR(200)  NOT NULL,
-        [LabGeoLocation]  NVARCHAR(500)  NULL,   -- e.g., address or lat/lng
+        [LabID]       INT            NOT NULL,
+        [LabName]     NVARCHAR(200)  NOT NULL,
+        [LabAddress]  NVARCHAR(500)  NULL,   -- Street address for Google Maps link
 
         CONSTRAINT [PK_Labs] PRIMARY KEY CLUSTERED ([LabID])
     );
@@ -58,16 +38,24 @@ BEGIN
 PRINT 'Table [Labs] created.';
 
 END
-
-INSERT INTO [dbo].[Labs] ([LabID], [LabName]. [LabGeoLocation])
-VALUES
-    (5552201, N'Κοσμοϊατρική Πατησίων', N'Πατησίων 237, Πλ. Κολιάτσου'),
-    (5552202, N'Κοσμοϊατρική Σεπολίων', N'Αμφιαράου 165, Σεπόλια, 10443'),
-    (5552203, N'Κοσμοϊατρική Άνω Πατησίων', N'Χαλκίδος 12, Άνω Πατήσια, 11143'),
-    (5552204, N'Κοσμοϊατρική Ιλίου', N'Θηβών 439, Ίλιον, 12131');
 GO
+
+-- Seed Labs data (safe to re-run — skips if rows already exist)
+IF NOT EXISTS (SELECT 1 FROM [dbo].[Labs] WHERE [LabID] = 5552201)
+BEGIN
+    INSERT INTO [dbo].[Labs] ([LabID], [LabName], [LabAddress])
+    VALUES
+        (5552201, N'Κοσμοϊατρική Πατησίων', N'Πατησίων 237, Πλ. Κολιάτσου'),
+        (5552202, N'Κοσμοϊατρική Σεπολίων', N'Αμφιαράου 165, Σεπόλια, 10443'),
+        (5552203, N'Κοσμοϊατρική Άνω Πατησίων', N'Χαλκίδος 12, Άνω Πατήσια, 11143'),
+        (5552204, N'Κοσμοϊατρική Ιλίου', N'Θηβών 439, Ίλιον, 12131');
+
+    PRINT 'Seed data inserted into [Labs].';
+END
+GO
+
 -- ============================================================================
--- 4. Patients
+-- 3. Patients
 -- ============================================================================
 
 
@@ -89,7 +77,7 @@ PRINT 'Table [Patients] created.';
 END
 
 -- ============================================================================
--- 5. Appointments
+-- 4. Appointments
 -- ============================================================================
 
 
@@ -104,13 +92,11 @@ BEGIN
         [Status]              NVARCHAR(50)   NOT NULL DEFAULT 'Scheduled',  -- Scheduled, Confirmed, Cancelled, Completed
         [LastSyncedAt]        DATETIME2(0)   NOT NULL DEFAULT SYSUTCDATETIME(),
         [LabID]               INT            NULL,
-        [DocID]               INT            NULL,
 
         CONSTRAINT [PK_Appointments]           PRIMARY KEY CLUSTERED ([AppointmentID]),
         CONSTRAINT [UQ_Appointments_SlisID]    UNIQUE ([SlisAppointmentID]),
         CONSTRAINT [FK_Appointments_Patients]  FOREIGN KEY ([PatientID]) REFERENCES [dbo].[Patients]([PatientID]),
-        CONSTRAINT [FK_Appointments_Labs]      FOREIGN KEY ([LabID])     REFERENCES [dbo].[Labs]([LabID]),
-        CONSTRAINT [FK_Appointments_Doctors]   FOREIGN KEY ([DocID])     REFERENCES [dbo].[Doctors]([DocID])
+        CONSTRAINT [FK_Appointments_Labs]      FOREIGN KEY ([LabID])     REFERENCES [dbo].[Labs]([LabID])
     );
 
 PRINT 'Table [Appointments] created.';
@@ -129,7 +115,7 @@ PRINT 'Index [IX_Appointments_DateTime] created.';
 END
 
 -- ============================================================================
--- 6. Notifications
+-- 5. Notifications
 -- ============================================================================
 
 
@@ -167,7 +153,7 @@ PRINT 'Index [IX_Notifications_MessageID] created.';
 END
 
 -- ============================================================================
--- 7. SyncState
+-- 6. SyncState
 -- ============================================================================
 
 
@@ -188,7 +174,7 @@ PRINT 'Table [SyncState] created.';
 END
 
 -- ============================================================================
--- 8. SyncLog
+-- 7. SyncLog
 -- ============================================================================
 
 
@@ -209,7 +195,7 @@ PRINT 'Table [SyncLog] created.';
 END
 
 -- ============================================================================
--- 9. Seed data: initial SyncState row for Appointments table
+-- 8. Seed data: initial SyncState row for Appointments table
 -- ============================================================================
 IF NOT EXISTS (SELECT 1 FROM [dbo].[SyncState] WHERE [TableName] = N'Appointments')
 BEGIN

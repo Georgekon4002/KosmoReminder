@@ -1,16 +1,87 @@
 -- ============================================================================
--- KosmoSMS — Change Tracking Sync Stored Procedure
+-- KosmoSMS — Sync Stored Procedure (Local LISKOSMO)
 -- ============================================================================
--- This procedure syncs appointments from Infomed Slis (via Linked Server and
--- Change Tracking) into the local KosmoSMS database.
+-- This procedure syncs appointments from the local LISKOSMO mock database
+-- into the KosmoSMS database.
 --
--- It should be scheduled via SQL Server Agent to run every 5-15 minutes.
+-- It queries LISKOSMO.DBO.* tables directly (no Linked Server needed).
+-- It normalizes ugly EXAMSTRCODE values into professional Greek text.
 --
--- !! Replace ALL <<...>> placeholders before deploying !!
+-- Schedule via SQL Server Agent to run every 5-15 minutes, or run manually.
 -- ============================================================================
 
 USE [KosmoSMS];
 GO
+
+-- ============================================================================
+-- Helper: Exam Name Mapping Table
+-- ============================================================================
+-- This table maps the raw EXAMSTRCODE values from Slis to clean,
+-- professional Greek names for use in patient-facing SMS messages.
+-- Add new mappings here as you encounter new exam types.
+-- ============================================================================
+
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ExamNameMap]') AND type = 'U')
+BEGIN
+    CREATE TABLE [dbo].[ExamNameMap] (
+        [RawCode]        NVARCHAR(200)  NOT NULL,   -- Exact EXAMSTRCODE from Slis (uppercase)
+        [DisplayName]    NVARCHAR(200)  NOT NULL,   -- Clean, professional Greek name
+
+        CONSTRAINT [PK_ExamNameMap] PRIMARY KEY CLUSTERED ([RawCode])
+    );
+    PRINT 'Table [ExamNameMap] created.';
+END
+GO
+
+-- Seed the mapping table with known exam types
+-- (safe to re-run — uses MERGE to upsert)
+MERGE [dbo].[ExamNameMap] AS target
+USING (VALUES
+    -- Ultrasound exams
+    (N'ΥΠ ΑΝΩ ΚΟΙΛΙΑΣ',                     N'Υπέρηχος Άνω Κοιλίας'),
+    (N'ΥΠ ΚΑΤΩ ΚΟΙΛ ΓΥ',                     N'Υπέρηχος Κάτω Κοιλίας Γυναικολογικός'),
+    (N'ΥΠ ΚΑΤΩ ΚΟΙΛ ΑΝ',                     N'Υπέρηχος Κάτω Κοιλίας Ανδρολογικός'),
+    (N'ΥΠ ΘΥΡΕΟΕΙΔΟΥΣ',                      N'Υπέρηχος Θυρεοειδούς'),
+    (N'ΥΠ ΜΑΣΤΩΝ',                            N'Υπέρηχος Μαστών'),
+    (N'US ΟΥΡ. ΚΥΣΤΗ-2',                      N'Υπέρηχος Ουροποιητικού'),
+    (N'US ΤΡΑΧΗΛΟΥ',                           N'Υπέρηχος Τραχήλου'),
+
+    -- MRI exams
+    (N'MRI ΟΜΣΣ',                              N'Μαγνητική Τομογραφία ΟΜΣΣ'),
+    (N'MRI ΩΜΟΥ ΔΕΞ',                         N'Μαγνητική Τομογραφία Ώμου Δεξιού'),
+    (N'MRI ΩΜΟΥ ΑΡΙΣΤ',                       N'Μαγνητική Τομογραφία Ώμου Αριστερού'),
+    (N'MRI ΓΟΝΑΤΟΣ ΔΕΞ',                      N'Μαγνητική Τομογραφία Γόνατος Δεξιού'),
+    (N'MRI ΓΟΝΑΤΟΣ ΑΡΙ',                      N'Μαγνητική Τομογραφία Γόνατος Αριστερού'),
+
+    -- Puncture / biopsy exams
+    (N'ΠΑΡΑΚΕΝΤΗΣΕΙΣ ΠΑΡΑΚ ΘΥΡΕΟΕΙΔ',         N'Παρακέντηση Θυρεοειδούς'),
+    (N'ΠΑΡΑΚ ΘΥΡΕΟΕΙΔ',                       N'Παρακέντηση Θυρεοειδούς'),
+
+    -- CT exams
+    (N'ΑΞ ΤΟΜΟ ΘΩΡΑΚΟΣ',                     N'Αξονική Τομογραφία Θώρακος'),
+    (N'ΑΣΤ ΘΩΡΑΚΟΣ',                          N'Αξονική Τομογραφία Θώρακος'),
+
+    -- Triplex / Doppler
+    (N'TR ΛΑΓΟΝ ΑΡΤ',                         N'Triplex Λαγονίων Αρτηριών'),
+    (N'TR ΑΡΤ ΚΑΤΩ ΑΚΡ',                      N'Triplex Αρτηριών Κάτω Άκρων'),
+
+    -- Mammography
+    (N'ΜΑΣΤΟΓΡΑΦΙΑ',                           N'Μαστογραφία'),
+
+    -- Bone density
+    (N'ΟΣΤΕΟΠΥΚΝΟΜΕΤΡΙΑ',                     N'Οστεοπυκνομετρία')
+) AS source ([RawCode], [DisplayName])
+ON target.[RawCode] = source.[RawCode]
+WHEN NOT MATCHED THEN
+    INSERT ([RawCode], [DisplayName])
+    VALUES (source.[RawCode], source.[DisplayName]);
+
+PRINT 'ExamNameMap seeded with known exam types.';
+GO
+
+-- ============================================================================
+-- Main Sync Stored Procedure
+-- ============================================================================
 
 CREATE OR ALTER PROCEDURE [dbo].[usp_SyncAppointmentsFromSlis]
 AS
@@ -19,153 +90,131 @@ BEGIN
     SET XACT_ABORT ON;
 
     -- -------------------------------------------------------
-    -- Configuration: replace these placeholders
-    -- -------------------------------------------------------
-    DECLARE @LinkedServer   NVARCHAR(128) = N'<<SLIS_SERVER_NAME>>';
-    DECLARE @SlisDatabase   NVARCHAR(128) = N'<<SLIS_DATABASE_NAME>>';
-    DECLARE @SlisSchema     NVARCHAR(128) = N'dbo';
-    DECLARE @SlisTable      NVARCHAR(128) = N'<<SLIS_APPOINTMENTS_TABLE>>';
-
-    -- -------------------------------------------------------
     -- Variables
     -- -------------------------------------------------------
-    DECLARE @LastChangeVersion   BIGINT;
-    DECLARE @CurrentVersion      BIGINT;
-    DECLARE @RowsAffected        INT = 0;
-    DECLARE @RunAt               DATETIME2(0) = SYSUTCDATETIME();
-    DECLARE @ErrorMessage        NVARCHAR(MAX);
+    DECLARE @RowsAffected   INT = 0;
+    DECLARE @RunAt          DATETIME2(0) = SYSUTCDATETIME();
+    DECLARE @ErrorMessage   NVARCHAR(MAX);
 
     BEGIN TRY
         -- =======================================================
-        -- Step 1: Get the last sync version from SyncState
+        -- Step 1: Pull appointments from LISKOSMO into a temp table
         -- =======================================================
-        SELECT @LastChangeVersion = [LastChangeVersion]
-        FROM [dbo].[SyncState]
-        WHERE [TableName] = N'Appointments';
-
-        IF @LastChangeVersion IS NULL
-        BEGIN
-            RAISERROR('SyncState row for "Appointments" not found. Run 001_CreateDatabase.sql first.', 16, 1);
-            RETURN;
-        END
-
-        -- =======================================================
-        -- Step 2: Get the current change tracking version
-        --         from the remote (Slis) database
-        -- =======================================================
-        -- NOTE: CHANGE_TRACKING_CURRENT_VERSION() must be called
-        -- in the context of the remote database. We use OPENQUERY
-        -- for this since it's a scalar function.
-        -- =======================================================
-        DECLARE @VersionSQL NVARCHAR(MAX) = N'
-            SELECT CHANGE_TRACKING_CURRENT_VERSION()';
-
-        DECLARE @VersionResult TABLE ([CurrentVersion] BIGINT);
-
-        INSERT INTO @VersionResult
-        EXEC (@VersionSQL) AT [<<SLIS_SERVER_NAME>>];
-        -- NOTE: If the above fails, you may need to use OPENQUERY:
-        -- INSERT INTO @VersionResult
-        -- SELECT * FROM OPENQUERY([<<SLIS_SERVER_NAME>>],
-        --     'SELECT CHANGE_TRACKING_CURRENT_VERSION()');
-
-        SELECT @CurrentVersion = [CurrentVersion] FROM @VersionResult;
-
-        IF @CurrentVersion IS NULL
-        BEGIN
-            RAISERROR('Could not retrieve CHANGE_TRACKING_CURRENT_VERSION from Slis. Check linked server and Change Tracking config.', 16, 1);
-            RETURN;
-        END
-
-        -- If versions match, nothing has changed
-        IF @CurrentVersion = @LastChangeVersion
-        BEGIN
-            INSERT INTO [dbo].[SyncLog] ([RunAt], [RowsProcessed], [Status], [ErrorMessage])
-            VALUES (@RunAt, 0, N'Success', N'No changes detected (version unchanged).');
-            RETURN;
-        END
-
-        -- =======================================================
-        -- Step 3: Pull changed rows via CHANGETABLE(CHANGES ...)
-        -- =======================================================
-        -- We create a temp table to hold the changes pulled from
-        -- the remote server, since cross-server MERGE with
-        -- CHANGETABLE can be tricky.
+        -- This query mirrors the original Slis SELECT but reads
+        -- directly from the local LISKOSMO database.
         -- =======================================================
         IF OBJECT_ID('tempdb..#SlisChanges') IS NOT NULL
             DROP TABLE #SlisChanges;
 
-        CREATE TABLE #SlisChanges (
-            [SlisAppointmentID]   INT            NOT NULL,
-            [PatientID]           INT            NULL,
-            [AppointmentDateTime] DATETIME       NULL,
-            [ExamType]            NVARCHAR(200)  NULL,
-            [Status]              NVARCHAR(50)   NULL,
-            [LabID]               INT            NULL,
-            [DocID]               INT            NULL,
-            [SYS_CHANGE_OPERATION] CHAR(1)       NOT NULL   -- 'I' = Insert, 'U' = Update, 'D' = Delete
-        );
-
-        -- -------------------------------------------------------
-        -- IMPORTANT: Adjust the column names below to match the
-        -- actual column names in the Slis Appointments table.
-        -- The SELECT list maps Slis columns → our column names.
-        -- -------------------------------------------------------
-        DECLARE @ChangeSQL NVARCHAR(MAX) = N'
-            SELECT
-                ct.<<SLIS_APPOINTMENT_ID_COLUMN>>   AS SlisAppointmentID,
-                a.<<SLIS_PATIENT_ID_COLUMN>>        AS PatientID,
-                a.<<SLIS_DATETIME_COLUMN>>          AS AppointmentDateTime,
-                a.<<SLIS_EXAM_TYPE_COLUMN>>         AS ExamType,
-                a.<<SLIS_STATUS_COLUMN>>            AS [Status],
-                a.<<SLIS_LAB_ID_COLUMN>>            AS LabID,
-                a.<<SLIS_DOC_ID_COLUMN>>            AS DocID,
-                ct.SYS_CHANGE_OPERATION
-            FROM CHANGETABLE(CHANGES ' + QUOTENAME(@SlisDatabase) + N'.' + QUOTENAME(@SlisSchema) + N'.' + QUOTENAME(@SlisTable) + N', ' + CAST(@LastChangeVersion AS NVARCHAR(20)) + N') AS ct
-            LEFT JOIN ' + QUOTENAME(@SlisDatabase) + N'.' + QUOTENAME(@SlisSchema) + N'.' + QUOTENAME(@SlisTable) + N' AS a
-                ON a.<<SLIS_APPOINTMENT_ID_COLUMN>> = ct.<<SLIS_APPOINTMENT_ID_COLUMN>>';
-
-        INSERT INTO #SlisChanges
-        EXEC (@ChangeSQL) AT [<<SLIS_SERVER_NAME>>];
+        SELECT
+            SC.SCHEDULERDATAID                          AS SlisAppointmentID,
+            SC.DEMOGID                                  AS PatientID,
+            D.FNAME                                     AS PatientFirstName,
+            D.LNAME                                     AS PatientLastName,
+            D.MOBILE                                    AS PatientPhone,
+            D.EMAIL                                     AS PatientEmail,
+            SC.[START]                                  AS AppointmentDateTime,
+            -- Normalize the exam name: use the mapping table if available,
+            -- otherwise fall back to the raw EXAMSTRCODE as-is
+            COALESCE(emap.DisplayName, SM.EXAMSTRCODE)  AS ExamType,
+            CASE WHEN SC.DELETED = 1 THEN N'Cancelled' ELSE N'Scheduled' END AS [Status],
+            L.LABORATORYID                              AS LabID,
+            L.FNAME                                     AS LabName,
+            L.[ADDRESS]                                 AS LabAddress
+        INTO #SlisChanges
+        FROM [LISKOSMO].[dbo].[SCHEDULERDATA] AS SC WITH (NOLOCK)
+        INNER JOIN [LISKOSMO].[dbo].[SCHEDULERRESOURCES] AS SR WITH (NOLOCK)
+            ON SR.SCHEDULERRESOURCESID = SC.RESOURCEID
+        INNER JOIN [LISKOSMO].[dbo].[DEMOG] AS D WITH (NOLOCK)
+            ON D.DEMOGID = SC.DEMOGID
+        INNER JOIN [LISKOSMO].[dbo].[LABORATORY] AS L
+            ON L.LABORATORYID = SR.LABORATORYID
+        INNER JOIN [LISKOSMO].[dbo].[SCHEDULERDATAEXAM] AS SM WITH (NOLOCK)
+            ON SM.SCHEDULERDATAID = SC.SCHEDULERDATAID
+        LEFT JOIN [KosmoSMS].[dbo].[ExamNameMap] AS emap
+            ON emap.RawCode = UPPER(LTRIM(RTRIM(SM.EXAMSTRCODE)))
+        WHERE SC.DEMOGID IS NOT NULL
+          AND SC.DELETED = 0;
 
         -- =======================================================
-        -- Step 4: MERGE into local Appointments table
+        -- Step 2: Upsert Patients from the pulled data
         -- =======================================================
         BEGIN TRANSACTION;
 
+            MERGE [dbo].[Patients] AS target
+            USING (
+                SELECT DISTINCT
+                    PatientID,
+                    PatientFirstName,
+                    PatientLastName,
+                    PatientPhone,
+                    PatientEmail
+                FROM #SlisChanges
+                WHERE PatientID IS NOT NULL
+            ) AS source
+            ON target.[PatientID] = source.[PatientID]
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.[FirstName] = source.[PatientFirstName],
+                    target.[LastName]  = source.[PatientLastName],
+                    target.[Phone]     = source.[PatientPhone],
+                    target.[Email]     = source.[PatientEmail]
+            WHEN NOT MATCHED BY TARGET THEN
+                INSERT ([PatientID], [FirstName], [LastName], [Phone], [Email])
+                VALUES (source.[PatientID], source.[PatientFirstName],
+                        source.[PatientLastName], source.[PatientPhone], source.[PatientEmail]);
+
+        -- =======================================================
+        -- Step 3: Upsert Labs from the pulled data
+        -- =======================================================
+            MERGE [dbo].[Labs] AS target
+            USING (
+                SELECT DISTINCT
+                    LabID,
+                    LabName,
+                    LabAddress
+                FROM #SlisChanges
+                WHERE LabID IS NOT NULL
+            ) AS source
+            ON target.[LabID] = source.[LabID]
+            WHEN MATCHED THEN
+                UPDATE SET
+                    target.[LabName]    = source.[LabName],
+                    target.[LabAddress] = source.[LabAddress]
+            WHEN NOT MATCHED BY TARGET THEN
+                INSERT ([LabID], [LabName], [LabAddress])
+                VALUES (source.[LabID], source.[LabName], source.[LabAddress]);
+
+        -- =======================================================
+        -- Step 4: MERGE into Appointments
+        -- =======================================================
             MERGE [dbo].[Appointments] AS target
             USING #SlisChanges AS source
                 ON target.[SlisAppointmentID] = source.[SlisAppointmentID]
 
-            -- UPDATE existing rows (change operation = 'U' or 'I' when row already exists)
-            WHEN MATCHED AND source.[SYS_CHANGE_OPERATION] IN ('U', 'I') THEN
+            WHEN MATCHED THEN
                 UPDATE SET
                     target.[PatientID]           = source.[PatientID],
                     target.[AppointmentDateTime] = source.[AppointmentDateTime],
                     target.[ExamType]            = source.[ExamType],
                     target.[Status]              = source.[Status],
                     target.[LabID]               = source.[LabID],
-                    target.[DocID]               = source.[DocID],
                     target.[LastSyncedAt]         = SYSUTCDATETIME()
 
-            -- INSERT new rows
-            WHEN NOT MATCHED BY TARGET AND source.[SYS_CHANGE_OPERATION] IN ('I', 'U') THEN
-                INSERT ([SlisAppointmentID], [PatientID], [AppointmentDateTime], [ExamType], [Status], [LabID], [DocID], [LastSyncedAt])
-                VALUES (source.[SlisAppointmentID], source.[PatientID], source.[AppointmentDateTime],
-                        source.[ExamType], source.[Status], source.[LabID], source.[DocID], SYSUTCDATETIME())
-
-            -- DELETE rows that were deleted in Slis
-            WHEN MATCHED AND source.[SYS_CHANGE_OPERATION] = 'D' THEN
-                DELETE;
+            WHEN NOT MATCHED BY TARGET THEN
+                INSERT ([SlisAppointmentID], [PatientID], [AppointmentDateTime],
+                        [ExamType], [Status], [LabID], [LastSyncedAt])
+                VALUES (source.[SlisAppointmentID], source.[PatientID],
+                        source.[AppointmentDateTime], source.[ExamType],
+                        source.[Status], source.[LabID], SYSUTCDATETIME());
 
             SET @RowsAffected = @@ROWCOUNT;
 
         -- =======================================================
-        -- Step 5: Update SyncState with the new version
+        -- Step 5: Update SyncState
         -- =======================================================
             UPDATE [dbo].[SyncState]
-            SET [LastChangeVersion] = @CurrentVersion,
-                [LastRunAt]         = SYSUTCDATETIME()
+            SET [LastRunAt] = SYSUTCDATETIME()
             WHERE [TableName] = N'Appointments';
 
         COMMIT TRANSACTION;
@@ -250,6 +299,7 @@ GO
 
 PRINT '========================================';
 PRINT 'Sync stored procedure created/updated.';
-PRINT 'Replace <<...>> placeholders and schedule via SQL Agent.';
+PRINT 'Schedule via SQL Agent or run manually:';
+PRINT '  EXEC [dbo].[usp_SyncAppointmentsFromSlis];';
 PRINT '========================================';
 GO

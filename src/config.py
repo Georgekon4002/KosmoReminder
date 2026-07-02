@@ -61,8 +61,9 @@ class _Config:
         return os.environ.get(
             "MESSAGE_TEMPLATE",
             "Αγαπητέ/ή {PatientName}, σας υπενθυμίζουμε το ραντεβού σας στις "
-            "{DateTime} για {ExamType} στο {LabName}. Ιατρός: {DoctorName}. "
-            "Για αλλαγή ή ακύρωση, καλέστε μας.",
+            "{DateTime} για {ExamType} στο {LabName}. "
+            "Για αλλαγή ή ακύρωση, καλέστε μας. "
+            "Τοποθεσία: {MapsLink}",
         )
 
     # --- Callback Receiver (Flask) ---

@@ -39,18 +39,12 @@ SELECT
     p.Phone,
     p.Email,
     p.PreferredChannel,
-    -- Doctor
-    d.DocID,
-    d.FirstName   AS DoctorFirstName,
-    d.LastName    AS DoctorLastName,
-    d.Expertise,
     -- Lab
     l.LabID,
     l.LabName,
-    l.LabGeoLocation
+    l.LabAddress
 FROM dbo.Appointments a
 INNER JOIN dbo.Patients p ON p.PatientID = a.PatientID
-LEFT  JOIN dbo.Doctors  d ON d.DocID     = a.DocID
 LEFT  JOIN dbo.Labs     l ON l.LabID     = a.LabID
 WHERE
     -- Appointment is in the future
@@ -78,7 +72,7 @@ def get_due_appointments(lead_time_hours: int) -> list[dict]:
     Query appointments that are due for a reminder.
 
     Returns a list of dicts, each representing a flattened appointment
-    with patient, doctor, and lab info.
+    with patient and lab info.
     """
     try:
         conn = get_connection()

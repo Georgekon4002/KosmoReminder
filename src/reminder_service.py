@@ -17,6 +17,7 @@ Usage:
 import logging
 import sys
 import time
+from urllib.parse import quote
 
 import database
 import easysms_client
@@ -44,13 +45,9 @@ def build_message(appointment: dict) -> str:
     """
     Build the reminder message by replacing placeholders in the template.
 
-    Placeholders: {PatientName}, {ExamType}, {DateTime}, {LabName}, {DoctorName}
+    Placeholders: {PatientName}, {ExamType}, {DateTime}, {LabName}, {MapsLink}
     """
     patient_name = f"{appointment.get('PatientFirstName', '')} {appointment.get('PatientLastName', '')}".strip()
-
-    doctor_first = appointment.get("DoctorFirstName") or ""
-    doctor_last = appointment.get("DoctorLastName") or ""
-    doctor_name = f"{doctor_first} {doctor_last}".strip() or "τον ιατρό σας"
 
     # Format the date/time in Greek-friendly format: dd/MM/yyyy HH:mm
     appt_dt = appointment.get("AppointmentDateTime")
@@ -59,12 +56,19 @@ def build_message(appointment: dict) -> str:
     else:
         formatted_dt = ""
 
+    # Build a universal Google Maps link from the lab address
+    lab_address = (appointment.get("LabAddress") or "").strip()
+    if lab_address:
+        maps_link = f"https://maps.google.com/?q={quote(lab_address)}"
+    else:
+        maps_link = ""
+
     message = cfg.MESSAGE_TEMPLATE
     message = message.replace("{PatientName}", patient_name)
     message = message.replace("{ExamType}", appointment.get("ExamType") or "εξέταση")
     message = message.replace("{DateTime}", formatted_dt)
     message = message.replace("{LabName}", appointment.get("LabName") or "το εργαστήριο")
-    message = message.replace("{DoctorName}", doctor_name)
+    message = message.replace("{MapsLink}", maps_link)
 
     return message
 
