@@ -1,4 +1,4 @@
-@startuml
+@startuml architecture
 title Appointment Reminder System - High Level Architecture
 
 skinparam componentStyle rectangle
@@ -15,24 +15,25 @@ package "Sync Layer" {
 
 package "Own Operational DB (MS SQL Server)" {
   [Appointments Table]
-  [PatientContacts Table]
-  [NotificationLog Table]
+  [Patients Table]
+  [Notifications Table]
   [SyncState Table]
 }
 
-package "Reminder Service" {
-  [SQL Server Agent Job: Reminder Sender] as ReminderJob
-  [easysms.gr API Client]
+package "Reminder Service (Python)" {
+  [reminder_service.py] as ReminderScript
+  [easysms_client.py] as ApiClient
 }
 
-package "Webhook Receiver (ASP.NET Core)" {
-  [POST /api/sms-callback]
+package "Webhook Receiver (Flask / Python)" {
+  [callback_receiver.py] as CallbackApp
+  [GET/POST /api/sms-callback] as CallbackEndpoint
 }
 
 cloud "easysms.gr API" {
   [api/mobile/check]
-  [api/sms/send]
   [api/viber/send]
+  [api/sms/send]
 }
 
 SlisDB --> CT : enables
@@ -41,14 +42,14 @@ LS --> SyncJob : queried by
 SyncJob --> [Appointments Table] : MERGE / upsert
 SyncJob --> [SyncState Table] : reads/writes last version
 
-[Appointments Table] --> ReminderJob : reads pending appointments
-ReminderJob --> [api/mobile/check] : validate number
-ReminderJob --> [api/viber/send] : send Viber
-ReminderJob --> [api/sms/send] : fallback SMS
-ReminderJob --> [NotificationLog Table] : log sent status
+[Appointments Table] --> ReminderScript : reads due appointments
+ReminderScript --> ApiClient : uses
+ApiClient --> [api/mobile/check] : validate number
+ApiClient --> [api/viber/send] : send Viber (sms_fallback=true)
+ApiClient --> [api/sms/send] : direct SMS fallback
+ReminderScript --> [Notifications Table] : log sent status
 
-[api/sms/send] --> [POST /api/sms-callback] : delivery report callback
-[api/viber/send] --> [POST /api/sms-callback] : delivery report callback
-[POST /api/sms-callback] --> [NotificationLog Table] : update delivery status
+[api/sms/send] --> CallbackEndpoint : delivery report callback
+CallbackApp --> [Notifications Table] : update delivery status
 
 @enduml

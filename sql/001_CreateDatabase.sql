@@ -10,13 +10,12 @@
 IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'KosmoSMS')
 BEGIN
     CREATE DATABASE [KosmoSMS];
-    PRINT 'Database [KosmoSMS] created.';
+
+PRINT 'Database [KosmoSMS] created.';
+
+END ELSE BEGIN PRINT 'Database [KosmoSMS] already exists — skipping creation.';
+
 END
-ELSE
-BEGIN
-    PRINT 'Database [KosmoSMS] already exists — skipping creation.';
-END
-GO
 
 USE [KosmoSMS];
 GO
@@ -24,6 +23,8 @@ GO
 -- ============================================================================
 -- 2. Doctors
 -- ============================================================================
+
+
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Doctors]') AND type = 'U')
 BEGIN
     CREATE TABLE [dbo].[Doctors] (
@@ -34,13 +35,16 @@ BEGIN
 
         CONSTRAINT [PK_Doctors] PRIMARY KEY CLUSTERED ([DocID])
     );
-    PRINT 'Table [Doctors] created.';
+
+PRINT 'Table [Doctors] created.';
+
 END
-GO
 
 -- ============================================================================
 -- 3. Labs
 -- ============================================================================
+
+
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Labs]') AND type = 'U')
 BEGIN
     CREATE TABLE [dbo].[Labs] (
@@ -50,13 +54,23 @@ BEGIN
 
         CONSTRAINT [PK_Labs] PRIMARY KEY CLUSTERED ([LabID])
     );
-    PRINT 'Table [Labs] created.';
-END
-GO
 
+PRINT 'Table [Labs] created.';
+
+END
+
+INSERT INTO [dbo].[Labs] ([LabID], [LabName]. [LabGeoLocation])
+VALUES
+    (5552201, N'Κοσμοϊατρική Πατησίων', N'Πατησίων 237, Πλ. Κολιάτσου'),
+    (5552202, N'Κοσμοϊατρική Σεπολίων', N'Αμφιαράου 165, Σεπόλια, 10443'),
+    (5552203, N'Κοσμοϊατρική Άνω Πατησίων', N'Χαλκίδος 12, Άνω Πατήσια, 11143'),
+    (5552204, N'Κοσμοϊατρική Ιλίου', N'Θηβών 439, Ίλιον, 12131');
+GO
 -- ============================================================================
 -- 4. Patients
 -- ============================================================================
+
+
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Patients]') AND type = 'U')
 BEGIN
     CREATE TABLE [dbo].[Patients] (
@@ -69,13 +83,16 @@ BEGIN
 
         CONSTRAINT [PK_Patients] PRIMARY KEY CLUSTERED ([PatientID])
     );
-    PRINT 'Table [Patients] created.';
+
+PRINT 'Table [Patients] created.';
+
 END
-GO
 
 -- ============================================================================
 -- 5. Appointments
 -- ============================================================================
+
+
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Appointments]') AND type = 'U')
 BEGIN
     CREATE TABLE [dbo].[Appointments] (
@@ -95,9 +112,10 @@ BEGIN
         CONSTRAINT [FK_Appointments_Labs]      FOREIGN KEY ([LabID])     REFERENCES [dbo].[Labs]([LabID]),
         CONSTRAINT [FK_Appointments_Doctors]   FOREIGN KEY ([DocID])     REFERENCES [dbo].[Doctors]([DocID])
     );
-    PRINT 'Table [Appointments] created.';
+
+PRINT 'Table [Appointments] created.';
+
 END
-GO
 
 -- Index for querying upcoming appointments by date
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = N'IX_Appointments_DateTime' AND object_id = OBJECT_ID(N'[dbo].[Appointments]'))
@@ -105,13 +123,16 @@ BEGIN
     CREATE NONCLUSTERED INDEX [IX_Appointments_DateTime]
         ON [dbo].[Appointments] ([AppointmentDateTime])
         INCLUDE ([PatientID], [Status]);
-    PRINT 'Index [IX_Appointments_DateTime] created.';
+
+PRINT 'Index [IX_Appointments_DateTime] created.';
+
 END
-GO
 
 -- ============================================================================
 -- 6. Notifications
 -- ============================================================================
+
+
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Notifications]') AND type = 'U')
 BEGIN
     CREATE TABLE [dbo].[Notifications] (
@@ -129,9 +150,10 @@ BEGIN
         CONSTRAINT [PK_Notifications]              PRIMARY KEY CLUSTERED ([NotificationID]),
         CONSTRAINT [FK_Notifications_Appointments] FOREIGN KEY ([AppointmentID]) REFERENCES [dbo].[Appointments]([AppointmentID])
     );
-    PRINT 'Table [Notifications] created.';
+
+PRINT 'Table [Notifications] created.';
+
 END
-GO
 
 -- Index for callback lookups by MessageID
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = N'IX_Notifications_MessageID' AND object_id = OBJECT_ID(N'[dbo].[Notifications]'))
@@ -139,13 +161,16 @@ BEGIN
     CREATE NONCLUSTERED INDEX [IX_Notifications_MessageID]
         ON [dbo].[Notifications] ([MessageID])
         INCLUDE ([Status]);
-    PRINT 'Index [IX_Notifications_MessageID] created.';
+
+PRINT 'Index [IX_Notifications_MessageID] created.';
+
 END
-GO
 
 -- ============================================================================
 -- 7. SyncState
 -- ============================================================================
+
+
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SyncState]') AND type = 'U')
 BEGIN
     CREATE TABLE [dbo].[SyncState] (
@@ -157,13 +182,16 @@ BEGIN
         CONSTRAINT [PK_SyncState] PRIMARY KEY CLUSTERED ([SyncID]),
         CONSTRAINT [UQ_SyncState_TableName] UNIQUE ([TableName])
     );
-    PRINT 'Table [SyncState] created.';
+
+PRINT 'Table [SyncState] created.';
+
 END
-GO
 
 -- ============================================================================
 -- 8. SyncLog
 -- ============================================================================
+
+
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SyncLog]') AND type = 'U')
 BEGIN
     CREATE TABLE [dbo].[SyncLog] (
@@ -175,9 +203,10 @@ BEGIN
 
         CONSTRAINT [PK_SyncLog] PRIMARY KEY CLUSTERED ([LogID])
     );
-    PRINT 'Table [SyncLog] created.';
+
+PRINT 'Table [SyncLog] created.';
+
 END
-GO
 
 -- ============================================================================
 -- 9. Seed data: initial SyncState row for Appointments table
@@ -186,11 +215,14 @@ IF NOT EXISTS (SELECT 1 FROM [dbo].[SyncState] WHERE [TableName] = N'Appointment
 BEGIN
     INSERT INTO [dbo].[SyncState] ([TableName], [LastChangeVersion], [LastRunAt])
     VALUES (N'Appointments', 0, NULL);
-    PRINT 'Seed row inserted into [SyncState] for Appointments.';
+
+PRINT 'Seed row inserted into [SyncState] for Appointments.';
+
 END
-GO
 
 PRINT '========================================';
+
 PRINT 'KosmoSMS schema creation complete.';
+
 PRINT '========================================';
 GO

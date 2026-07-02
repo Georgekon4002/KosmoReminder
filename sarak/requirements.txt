@@ -1,0 +1,23 @@
+# Core GUI
+PySide6>=6.6.0
+
+# Database
+pyodbc>=4.0.39
+
+# HTTP API Client
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Scheduling (service mode)
+APScheduler>=3.10.4
+
+# Web service (IIS / Linux API mode - optional)
+flask>=3.0.0
+waitress>=2.1.2      # Windows WSGI server
+gunicorn>=21.2.0     # Linux WSGI server
+
+# Windows Service (optional - Windows only)
+# pywin32>=306
+
+# Utilities
+python-dotenv>=1.0.0

@@ -1,36 +1,41 @@
 @startuml
 title Reminder Send and Delivery Confirmation - Sequence Diagram
 
-actor "SQL Agent\nScheduler" as Sched
-participant "Reminder Service" as Service
-participant "Own DB\n(Appointments)" as OwnDB
+participant "reminder_service.py" as Service
+participant "KosmoSMS DB\n(Appointments)" as OwnDB
 participant "easysms.gr API" as API
-participant "Webhook Receiver" as Webhook
-participant "Own DB\n(NotificationLog)" as Log
+participant "callback_receiver.py\n(Flask)" as Webhook
+participant "KosmoSMS DB\n(Notifications)" as Log
 actor "Patient" as Patient
 
-Sched -> Service : trigger (every 15 min)
-Service -> OwnDB : SELECT appointments\nwhere reminder due
+Service -> OwnDB : SELECT appointments\nwhere reminder due\n(24h window)
 OwnDB --> Service : list of appointments
 
 loop for each appointment
   Service -> API : api/mobile/check(phone)
-  API --> Service : number type (mobile/landline)
+  API --> Service : mobile object (msisdn, status)
 
-  alt Viber available
-    Service -> API : api/viber/send(msg, callback_url)
-  else fallback
-    Service -> API : api/sms/send(msg, callback_url)
+  alt Patient prefers SMS only
+    Service -> API : api/sms/send(key, to, text,\nfrom, callback, ucs=true)
+    API --> Service : smsId, status=1
+    Service -> Log : INSERT Notification\n(smsId, channel=SMS, status=Sent)
+  else Viber with auto-fallback (default)
+    Service -> API : api/viber/send(key, to, text,\nfrom, sms_fallback=true,\nsms_text, sms_from, ucs=true)
+    API --> Service : id, status=1
+    Service -> Log : INSERT Notification\n(id, channel=Viber, status=Sent)
+    note right of API
+      easysms.gr tries Viber first.
+      If Viber fails within validity
+      period, it automatically sends
+      the fallback SMS.
+    end note
   end
 
-  API --> Service : msgid, initial status
-  Service -> Log : INSERT NotificationLog\n(msgid, sent_at, channel, status=pending)
-
-  API -> Patient : deliver SMS/Viber message
+  API -> Patient : deliver Viber or SMS message
 end
 
 API -> Webhook : GET /api/sms-callback?\nmsgid&status&cost&to&mcc&mnc
-Webhook -> Log : UPDATE NotificationLog\nSET status, delivered_at, cost\nWHERE msgid = ?
+Webhook -> Log : UPDATE Notifications\nSET status, delivered_at, cost\nWHERE msgid = ?
 Log --> Webhook : ack
 Webhook --> API : 200 OK
 
