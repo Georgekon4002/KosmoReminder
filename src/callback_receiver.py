@@ -22,7 +22,7 @@ import os
 import sys
 from decimal import Decimal, InvalidOperation
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 
 import database
 from config import cfg
@@ -44,13 +44,45 @@ logger = logging.getLogger("callback_receiver")
 # ---------------------------------------------------------------------------
 # Flask app
 # ---------------------------------------------------------------------------
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    static_folder="static",
+    template_folder="templates"
+)
 
 
 @app.route("/health", methods=["GET"])
 def health():
     """Simple health check endpoint."""
     return jsonify({"status": "ok"}), 200
+
+
+@app.route("/", methods=["GET"])
+def index():
+    """Serve the dashboard UI."""
+    return render_template("index.html")
+
+
+@app.route("/api/dashboard/stats", methods=["GET"])
+def dashboard_stats():
+    """Return dashboard summary statistics."""
+    try:
+        stats = database.get_dashboard_stats()
+        return jsonify(stats), 200
+    except Exception:
+        logger.exception("Error getting dashboard stats")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/dashboard/messages", methods=["GET"])
+def dashboard_messages():
+    """Return recent notifications for the dashboard."""
+    try:
+        messages = database.get_all_notifications(limit=100)
+        return jsonify(messages), 200
+    except Exception:
+        logger.exception("Error getting dashboard messages")
+        return jsonify({"error": "Internal server error"}), 500
 
 
 @app.route("/api/sms-callback", methods=["GET", "POST"])

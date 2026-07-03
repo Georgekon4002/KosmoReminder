@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KosmoSMS Dashboard</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <!-- Phosphor Icons for beautiful UI icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar or Header -->
+        <header class="top-nav glass-panel">
+            <div class="logo">
+                <i class="ph-fill ph-paper-plane-tilt"></i>
+                <h1>KosmoSMS</h1>
+            </div>
+            <div class="user-info">
+                <span>Dashboard</span>
+                <div class="status-indicator live">
+                    <span class="pulse"></span> Live
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Stats Grid -->
+            <section class="stats-grid">
+                <div class="stat-card glass-panel fade-in" style="--delay: 0.1s">
+                    <div class="stat-icon purple"><i class="ph ph-hash"></i></div>
+                    <div class="stat-info">
+                        <h3>Total Processed</h3>
+                        <p id="stat-total" class="stat-value">--</p>
+                    </div>
+                </div>
+                <div class="stat-card glass-panel fade-in" style="--delay: 0.2s">
+                    <div class="stat-icon blue"><i class="ph ph-paper-plane-right"></i></div>
+                    <div class="stat-info">
+                        <h3>Sent</h3>
+                        <p id="stat-sent" class="stat-value">--</p>
+                    </div>
+                </div>
+                <div class="stat-card glass-panel fade-in" style="--delay: 0.3s">
+                    <div class="stat-icon green"><i class="ph ph-check-circle"></i></div>
+                    <div class="stat-info">
+                        <h3>Delivered</h3>
+                        <p id="stat-delivered" class="stat-value">--</p>
+                    </div>
+                </div>
+                <div class="stat-card glass-panel fade-in" style="--delay: 0.4s">
+                    <div class="stat-icon red"><i class="ph ph-warning-circle"></i></div>
+                    <div class="stat-info">
+                        <h3>Failed / Rejected</h3>
+                        <p id="stat-failed" class="stat-value">--</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Data Table -->
+            <section class="table-section glass-panel fade-in" style="--delay: 0.5s">
+                <div class="table-header">
+                    <h2>Recent Messages</h2>
+                    <button id="refresh-btn" class="btn-refresh">
+                        <i class="ph ph-arrows-clockwise"></i> Refresh
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Patient</th>
+                                <th>Phone</th>
+                                <th>Exam</th>
+                                <th>Channel</th>
+                                <th>Status</th>
+                                <th>Sent At</th>
+                                <th>Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody id="messages-tbody">
+                            <!-- Rows will be populated by JS -->
+                            <tr>
+                                <td colspan="7" class="loading-state">
+                                    <i class="ph ph-spinner-gap spin"></i> Loading data...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- App Logic -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

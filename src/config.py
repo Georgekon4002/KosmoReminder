@@ -58,13 +58,15 @@ class _Config:
 
     @property
     def MESSAGE_TEMPLATE(self) -> str:
+        # Placeholders: {Department}, {LabName}, {LabAddress}, {Day}, {Date}, {Time}
+        # Also available for custom variants: {Greeting}, {ExamType}
         return os.environ.get(
             "MESSAGE_TEMPLATE",
-            "Αγαπητέ/ή {PatientName}, σας υπενθυμίζουμε το ραντεβού σας στις "
-            "{DateTime} για {ExamType} στο {LabName}. "
-            "Για αλλαγή ή ακύρωση, καλέστε μας. "
-            "Τοποθεσία: {MapsLink}",
+            "ΚΟΣΜΟΙΑΤΡΙΚΗ: Σας υπενθυμίζουμε το ραντεβού σας στο "
+            "{Department} της Μονάδας {LabName} ({LabAddress}) "
+            "είναι προγραμματισμένο για την {Day} {Date} και ώρα {Time}.",
         )
+
 
     # --- Callback Receiver (Flask) ---
     @property

@@ -45,7 +45,7 @@ def check_mobile(phone: str) -> Optional[dict]:
         data = resp.json()
 
         status = data.get("status")
-        if status == 1:
+        if str(status) == "1":
             mobile_info = data.get("mobile", {})
             logger.debug(
                 "Mobile check OK for %s: msisdn=%s",
@@ -104,7 +104,7 @@ def send_viber(
         resp.raise_for_status()
         data = resp.json()
 
-        if data.get("status") == 1:
+        if str(data.get("status")) == "1":
             logger.info(
                 "Viber message sent to %s, id=%s, cost=%s",
                 to, data.get("id"), data.get("cost"),
@@ -154,7 +154,7 @@ def send_sms(
         resp.raise_for_status()
         data = resp.json()
 
-        if data.get("status") == 1:
+        if str(data.get("status")) == "1":
             logger.info(
                 "SMS sent to %s, smsId=%s, cost=%s",
                 to, data.get("smsId"), data.get("cost"),

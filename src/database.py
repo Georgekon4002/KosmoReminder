@@ -25,19 +25,26 @@ def get_connection() -> pyodbc.Connection:
 # Queries used by reminder_service.py
 # =============================================================================
 
+# Groups appointments by patient + lab + department + appointment day.
+# A patient with same-day exams in DIFFERENT departments gets separate SMS.
+# A patient with same-day exams in the SAME department gets one SMS
+# with all exam types concatenated.
 _SQL_DUE_APPOINTMENTS = """\
 SELECT
-    a.AppointmentID,
-    a.SlisAppointmentID,
-    a.AppointmentDateTime,
-    a.ExamType,
-    a.Status,
+    STRING_AGG(a.ExamType, ', ') WITHIN GROUP (ORDER BY a.AppointmentDateTime)
+                                    AS ExamType,
+    MIN(a.AppointmentDateTime)      AS AppointmentDateTime,
+    STRING_AGG(CAST(a.AppointmentID AS NVARCHAR(20)), '|')
+                                    AS AppointmentIDs,
+    -- Department (normalized from SCHEDULERRESOURCESGROUP via DepartmentMap)
+    a.Department,
     -- Patient
     p.PatientID,
     p.FirstName   AS PatientFirstName,
     p.LastName    AS PatientLastName,
     p.Phone,
     p.Email,
+    p.Sex,
     p.PreferredChannel,
     -- Lab
     l.LabID,
@@ -47,32 +54,45 @@ FROM dbo.Appointments a
 INNER JOIN dbo.Patients p ON p.PatientID = a.PatientID
 LEFT  JOIN dbo.Labs     l ON l.LabID     = a.LabID
 WHERE
-    -- Appointment is in the future
     a.AppointmentDateTime > SYSUTCDATETIME()
-    -- Appointment is within the reminder window
     AND a.AppointmentDateTime <= DATEADD(HOUR, ?, SYSUTCDATETIME())
-    -- Not cancelled or completed
     AND a.Status NOT IN ('Cancelled', 'Completed')
-    -- Patient has a phone number
     AND p.Phone IS NOT NULL
     AND LEN(LTRIM(RTRIM(p.Phone))) > 0
-    -- No existing successful notification for this appointment
+    -- Exclude groups where ALL appointments already have a notification
     AND NOT EXISTS (
         SELECT 1
         FROM dbo.Notifications n
         WHERE n.AppointmentID = a.AppointmentID
           AND n.Status IN ('Sent', 'Delivered', 'Pending')
     )
-ORDER BY a.AppointmentDateTime;
+GROUP BY
+    p.PatientID,
+    p.FirstName,
+    p.LastName,
+    p.Phone,
+    p.Email,
+    p.Sex,
+    p.PreferredChannel,
+    l.LabID,
+    l.LabName,
+    l.LabAddress,
+    a.Department,
+    CAST(a.AppointmentDateTime AS DATE)
+ORDER BY AppointmentDateTime;
 """
 
 
 def get_due_appointments(lead_time_hours: int) -> list[dict]:
     """
-    Query appointments that are due for a reminder.
+    Query appointments due for a reminder, grouped by patient + lab + day.
 
-    Returns a list of dicts, each representing a flattened appointment
-    with patient and lab info.
+    Each dict represents one SMS to send. Key fields:
+      - AppointmentIDs      : pipe-delimited string of grouped appointment IDs
+      - ExamType            : comma-separated list of normalized exam names
+      - Department          : patient-facing department name (e.g. 'Τμήμα Αξονικού')
+      - AppointmentDateTime : earliest slot (used for Day/Date/Time in SMS)
+      - Sex                 : 'M' | 'F' | None — for the gendered greeting helper
     """
     try:
         conn = get_connection()
@@ -85,7 +105,7 @@ def get_due_appointments(lead_time_hours: int) -> list[dict]:
         cursor.close()
         conn.close()
 
-        logger.info("Found %d appointments due for reminder", len(rows))
+        logger.info("Found %d appointment groups due for reminder", len(rows))
         return rows
 
     except Exception:
@@ -137,6 +157,44 @@ def insert_notification(
             "Error inserting notification for appointment %d", appointment_id
         )
         raise
+
+
+_SQL_UPDATE_PREFERRED_CHANNEL = """\
+UPDATE dbo.Patients
+SET PreferredChannel = ?
+WHERE PatientID = ?;
+"""
+
+def set_preferred_channel(patient_id: int, channel: str) -> None:
+    """
+    Update the preferred channel for a patient.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(_SQL_UPDATE_PREFERRED_CHANNEL, (channel, patient_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        logger.info("Updated preferred channel for patient %d to %s", patient_id, channel)
+    except Exception:
+        logger.exception("Error updating preferred channel for patient %d", patient_id)
+        # We don't raise here, as this is a non-critical update
+
+def insert_notifications_for_group(
+    appointment_ids: list[int],
+    message_id: Optional[str],
+    channel_used: str,
+    status: str,
+) -> None:
+    """
+    Insert one Notification row per appointment in a grouped SMS send.
+
+    All rows share the same message_id (the single SMS sent to the patient)
+    so delivery callbacks update all of them at once.
+    """
+    for appt_id in appointment_ids:
+        insert_notification(appt_id, message_id, channel_used, status)
 
 
 # =============================================================================
@@ -236,3 +294,89 @@ def update_delivery_status(
             "Error updating notification status for msgid=%s", message_id
         )
         raise
+
+# =============================================================================
+# Queries used by dashboard UI
+# =============================================================================
+
+_SQL_DASHBOARD_STATS = """\
+SELECT 
+    COUNT(*) AS Total,
+    SUM(CASE WHEN Status = 'Sent' THEN 1 ELSE 0 END) AS Sent,
+    SUM(CASE WHEN Status = 'Delivered' THEN 1 ELSE 0 END) AS Delivered,
+    SUM(CASE WHEN Status IN ('Failed', 'Rejected') THEN 1 ELSE 0 END) AS Failed,
+    SUM(CASE WHEN Status = 'Pending' THEN 1 ELSE 0 END) AS Pending
+FROM dbo.Notifications;
+"""
+
+def get_dashboard_stats() -> dict:
+    """Get aggregate statistics for the dashboard."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(_SQL_DASHBOARD_STATS)
+        
+        columns = [desc[0] for desc in cursor.description]
+        row = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if row:
+            return dict(zip(columns, row))
+        return {"Total": 0, "Sent": 0, "Delivered": 0, "Failed": 0, "Pending": 0}
+        
+    except Exception:
+        logger.exception("Error fetching dashboard stats")
+        return {"Total": 0, "Sent": 0, "Delivered": 0, "Failed": 0, "Pending": 0}
+
+_SQL_ALL_NOTIFICATIONS = """\
+SELECT TOP (?)
+    n.NotificationID,
+    n.MessageID,
+    n.ChannelUsed,
+    n.Status,
+    n.SentAt,
+    n.DeliveredAt,
+    n.Cost,
+    a.AppointmentDateTime,
+    a.ExamType,
+    a.Department,
+    p.FirstName,
+    p.LastName,
+    p.Phone
+FROM dbo.Notifications n
+LEFT JOIN dbo.Appointments a ON n.AppointmentID = a.AppointmentID
+LEFT JOIN dbo.Patients p ON a.PatientID = p.PatientID
+ORDER BY n.SentAt DESC;
+"""
+
+def get_all_notifications(limit: int = 100) -> list[dict]:
+    """Get the most recent notifications for the dashboard list."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(_SQL_ALL_NOTIFICATIONS, (limit,))
+        
+        columns = [desc[0] for desc in cursor.description]
+        rows = []
+        for row in cursor.fetchall():
+            row_dict = dict(zip(columns, row))
+            # Format dates to string for JSON serialization
+            if row_dict['SentAt']:
+                row_dict['SentAt'] = row_dict['SentAt'].isoformat()
+            if row_dict['DeliveredAt']:
+                row_dict['DeliveredAt'] = row_dict['DeliveredAt'].isoformat()
+            if row_dict['AppointmentDateTime']:
+                row_dict['AppointmentDateTime'] = row_dict['AppointmentDateTime'].isoformat()
+            if row_dict['Cost'] is not None:
+                row_dict['Cost'] = float(row_dict['Cost'])
+            rows.append(row_dict)
+            
+        cursor.close()
+        conn.close()
+        return rows
+        
+    except Exception:
+        logger.exception("Error fetching all notifications")
+        return []
