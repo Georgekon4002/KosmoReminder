@@ -67,7 +67,14 @@ def index():
 def dashboard_stats():
     """Return dashboard summary statistics."""
     try:
-        stats = database.get_dashboard_stats()
+        mode = request.args.get("mode", "all-time")
+        # In the db, 'today' gets today's sent logic in get_dashboard_stats
+        db_mode = 'today-sent' if mode == 'today' else 'all-time'
+        stats = database.get_dashboard_stats(db_mode)
+        
+        pending_groups = database.get_pending_appointments(mode)
+        stats["Pending"] = len(pending_groups)
+        
         return jsonify(stats), 200
     except Exception:
         logger.exception("Error getting dashboard stats")
@@ -78,7 +85,28 @@ def dashboard_stats():
 def dashboard_messages():
     """Return recent notifications for the dashboard."""
     try:
-        messages = database.get_all_notifications(limit=100)
+        mode = request.args.get("mode", "all-time")
+        
+        messages = []
+        pending_groups = database.get_pending_appointments(mode)
+        for d in pending_groups:
+            messages.append({
+                "FirstName": d.get("PatientFirstName", ""),
+                "LastName": d.get("PatientLastName", ""),
+                "Department": d.get("Department", ""),
+                "Phone": d.get("Phone", ""),
+                "ExamType": d.get("ExamType", ""),
+                "ChannelUsed": d.get("PreferredChannel") or "SMS",
+                "Status": "Pending",
+                "SentAt": None,
+                "AppointmentDateTime": d.get("AppointmentDateTime").isoformat() if d.get("AppointmentDateTime") else None,
+                "Cost": None
+            })
+            
+        db_mode = 'today-sent' if mode == 'today' else 'all-time'
+        notifs = database.get_all_notifications(limit=100, mode=db_mode)
+        messages.extend(notifs)
+        
         return jsonify(messages), 200
     except Exception:
         logger.exception("Error getting dashboard messages")

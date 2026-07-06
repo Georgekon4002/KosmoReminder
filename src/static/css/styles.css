@@ -57,6 +57,37 @@ body {
     gap: 24px;
 }
 
+/* Tabs */
+.tabs-container {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.tab-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.tab-btn.active {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--accent-blue);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
 /* Header */
 .top-nav {
     display: flex;
@@ -178,6 +209,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    margin-top: 16px;
 }
 
 .table-header {

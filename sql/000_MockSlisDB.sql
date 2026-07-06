@@ -15,6 +15,7 @@ BEGIN
     DROP DATABASE [LISKOSMO];
     PRINT 'Database [LISKOSMO] dropped.';
 END
+GO
 
 CREATE DATABASE [LISKOSMO];
 PRINT 'Database [LISKOSMO] created.';
@@ -198,12 +199,12 @@ IF NOT EXISTS (SELECT 1 FROM [dbo].[DEMOG] WHERE [DEMOGID] = 728314)
 BEGIN
     INSERT INTO [dbo].[DEMOG] ([DEMOGID], [LNAME], [FNAME], [MOBILE], [EMAIL], [SEX])
     VALUES
-        (728314, N'ΑΝΔΡΕΣΑΚΗ',    N'ΜΑΡΙΑ',      N'6972719730', N'mandressaki@hotmail.com', 'F'),
-        (827598, N'ΓΕΩΡΓΙΟΥ',     N'ΑΣΗΜΕΝΙΑ',   N'6940581538', NULL,                       'F'),
-        (576903, N'ΜΟΥΓΚΑΡΑΚΗΣ', N'ΠΑΝΑΓΙΩΤΗΣ', N'6938924827', NULL,                       'M'),
-        (260603, N'ΚΑΒΑΛΗ',       N'ΙΩΑΝΝΑ',     N'6980212413', N'i.micha@progressinc.gr',  'F'),
-        (344423, N'ΚΑΡΑΜΟΥΤΣΙΟΣ',N'ΔΗΜΗΤΡΙΟΣ',  N'6951855801', N'michalisp75@gmail.com',   'M'),
-        (311678, N'ΚΑΤΣΟΥΛΑ',     N'ΠΑΡΑΣΚΕΥΗ',  N'6972286096', N'mary_hala@yahoo.com',     'F');
+        (728314, N'ΑΝΔΡΕΣΑΚΗ',    N'ΜΑΡΙΑ',      N'6970668784', N'mandressaki@hotmail.com', 'F'),
+        (827598, N'ΓΕΩΡΓΙΟΥ',     N'ΑΣΗΜΕΝΙΑ',   N'6970668784', NULL,                       'F'),
+        (576903, N'ΜΟΥΓΚΑΡΑΚΗΣ', N'ΠΑΝΑΓΙΩΤΗΣ', N'6970668784', NULL,                       'M'),
+        (260603, N'ΚΑΒΑΛΗ',       N'ΙΩΑΝΝΑ',     N'6970668784', N'i.micha@progressinc.gr',  'F'),
+        (344423, N'ΚΑΡΑΜΟΥΤΣΙΟΣ',N'ΔΗΜΗΤΡΙΟΣ',  N'6970668784', N'michalisp75@gmail.com',   'M'),
+        (311678, N'ΚΑΤΣΟΥΛΑ',     N'ΠΑΡΑΣΚΕΥΗ',  N'6970668784', N'mary_hala@yahoo.com',     'F');
     PRINT 'Seed data inserted into [DEMOG].';
 END
 GO
@@ -225,53 +226,90 @@ BEGIN
     VALUES
         -- ΑΝΔΡΕΣΑΚΗ ΜΑΡΙΑ (F) — Puncture at ΚΟΛΙΑΤΣΟΥ (Lab 1, Group 3)
         (2990743,
-         DATEADD(MINUTE, 1410, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
-         DATEADD(MINUTE, 1440, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
+         CAST('2026-07-07 12:40:00' AS DATETIME),
+         CAST('2026-07-07 12:50:00' AS DATETIME),
          12, N'ΦΝΑ ΘΥΡΕΟ ΦΙΛΗ κ ΠΙΠΕΡΟΠΟΥΛΟΥ ΔΩΡΕΑΝ!!!!', 728314, 0, NULL),
 
         -- ΓΕΩΡΓΙΟΥ ΑΣΗΜΕΝΙΑ (F) — MRI at ΙΛΙΟΥ (Lab 7, Group 4)
         (2992733,
-         DATEADD(MINUTE, 1350, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
-         DATEADD(MINUTE, 1380, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
+         CAST('2026-07-07 18:00:00' AS DATETIME),
+         CAST('2026-07-07 18:30:00' AS DATETIME),
          77, NULL, 827598, 0, 33549),
 
         -- ΜΟΥΓΚΑΡΑΚΗΣ ΠΑΝΑΓΙΩΤΗΣ (M) — Ultrasound at ΣΕΠΟΛΙΩΝ (Lab 5, Group 3)
         (2943960,
-         DATEADD(MINUTE, 1470, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
-         DATEADD(MINUTE, 1500, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
+         CAST('2026-07-07 11:00:00' AS DATETIME),
+         CAST('2026-07-07 11:30:00' AS DATETIME),
          24, NULL, 576903, 0, 23257),
 
         -- ΜΟΥΓΚΑΡΑΚΗΣ ΠΑΝΑΓΙΩΤΗΣ (M) — CT at ΣΕΠΟΛΙΩΝ same day (Lab 5, Group 5)
         -- DIFFERENT department → separate SMS
         (2943961,
-         DATEADD(MINUTE, 1530, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
-         DATEADD(MINUTE, 1560, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
+         CAST('2026-07-08 12:00:00' AS DATETIME),
+         CAST('2026-07-08 12:30:00' AS DATETIME),
          19, NULL, 576903, 0, 23257),
 
         -- ΚΑΒΑΛΗ ΙΩΑΝΝΑ (F) — MRI at ΣΕΠΟΛΙΩΝ (Lab 5, Group 4)
         (2941823,
-         DATEADD(MINUTE, 1590, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
-         DATEADD(MINUTE, 1620, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
+         CAST('2026-07-09 13:00:00' AS DATETIME),
+         CAST('2026-07-09 13:30:00' AS DATETIME),
          22, NULL, 260603, 0, 20145),
 
         -- ΚΑΒΑΛΗ ΙΩΑΝΝΑ (F) — Ultrasound at ΣΕΠΟΛΙΩΝ same day (Lab 5, Group 3)
         -- DIFFERENT department → separate SMS
         (2941824,
-         DATEADD(MINUTE, 1650, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
-         DATEADD(MINUTE, 1680, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
+         CAST('2026-07-10 14:00:00' AS DATETIME),
+         CAST('2026-07-10 14:30:00' AS DATETIME),
          24, NULL, 260603, 0, 20145),
 
         -- ΚΑΡΑΜΟΥΤΣΙΟΣ ΔΗΜΗΤΡΙΟΣ (M) — Ultrasound at ΚΟΛΙΑΤΣΟΥ (Lab 1, Group 3)
         (2956163,
-         DATEADD(MINUTE, 1380, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
-         DATEADD(MINUTE, 1410, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
+         CAST('2026-07-11 09:30:00' AS DATETIME),
+         CAST('2026-07-11 10:00:00' AS DATETIME),
          16, N'2606036558079', 344423, 0, 25241),
 
         -- ΚΑΤΣΟΥΛΑ ΠΑΡΑΣΚΕΥΗ (F) — Ultrasound at ΑΝΩ ΠΑΤΗΣΙΩΝ (Lab 6, Group 3)
         (2945443,
-         DATEADD(MINUTE, 1440, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
-         DATEADD(MINUTE, 1470, CAST(CAST(GETDATE() AS DATE) AS DATETIME)),
-         32, N'ΘΥΡ - ΤΡΑΧΗΛΟΥ ΜΑΖΙ 50Ε ΕΝΗΜΕΡΗ ΧΑΛΚΙΔΟΣ', 311678, 0, 9362);
+         CAST('2026-07-12 10:30:00' AS DATETIME),
+         CAST('2026-07-12 11:00:00' AS DATETIME),
+         32, N'ΘΥΡ - ΤΡΑΧΗΛΟΥ ΜΑΖΙ 50Ε ΕΝΗΜΕΡΗ ΧΑΛΚΙΔΟΣ', 311678, 0, 9362),
+
+        -- MORE DUMMY APPOINTMENTS FOR TESTING --
+        -- ΚΑΡΑΜΟΥΤΣΙΟΣ ΔΗΜΗΤΡΙΟΣ (M) — Puncture at ΚΟΛΙΑΤΣΟΥ (Lab 1, Group 3)
+        (3000001,
+         CAST('2026-07-07 14:30:00' AS DATETIME),
+         CAST('2026-07-07 15:00:00' AS DATETIME),
+         12, NULL, 344423, 0, NULL),
+
+        -- ΚΑΤΣΟΥΛΑ ΠΑΡΑΣΚΕΥΗ (F) — MRI at ΙΛΙΟΥ (Lab 7, Group 4)
+        (3000002,
+         CAST('2026-07-07 09:00:00' AS DATETIME),
+         CAST('2026-07-07 09:30:00' AS DATETIME),
+         77, NULL, 311678, 0, NULL),
+
+        -- ΑΝΔΡΕΣΑΚΗ ΜΑΡΙΑ (F) — CT at ΣΕΠΟΛΙΩΝ (Lab 5, Group 5)
+        (3000003,
+         CAST('2026-07-08 10:00:00' AS DATETIME),
+         CAST('2026-07-08 10:30:00' AS DATETIME),
+         19, NULL, 728314, 0, NULL),
+
+        -- ΓΕΩΡΓΙΟΥ ΑΣΗΜΕΝΙΑ (F) — Ultrasound at ΣΕΠΟΛΙΩΝ (Lab 5, Group 3)
+        (3000004,
+         CAST('2026-07-09 11:15:00' AS DATETIME),
+         CAST('2026-07-09 11:45:00' AS DATETIME),
+         24, NULL, 827598, 0, NULL),
+
+        -- ΜΟΥΓΚΑΡΑΚΗΣ ΠΑΝΑΓΙΩΤΗΣ (M) — Ultrasound at ΑΝΩ ΠΑΤΗΣΙΩΝ (Lab 6, Group 3)
+        (3000005,
+         CAST('2026-07-07 15:00:00' AS DATETIME),
+         CAST('2026-07-07 15:30:00' AS DATETIME),
+         32, NULL, 576903, 0, NULL),
+
+        -- ΚΑΒΑΛΗ ΙΩΑΝΝΑ (F) — Ultrasound at ΚΟΛΙΑΤΣΟΥ (Lab 1, Group 3)
+        (3000006,
+         CAST('2026-07-08 09:00:00' AS DATETIME),
+         CAST('2026-07-08 09:30:00' AS DATETIME),
+         16, NULL, 260603, 0, NULL);
 
     PRINT 'Seed data inserted into [SCHEDULERDATA].';
 END
@@ -292,7 +330,13 @@ BEGIN
         (2941823, N'MRI ΓΟΝΑΤΟΣ ΔΕΞ'),                 -- ΚΑΒΑΛΗ #1
         (2941824, N'ΥΠ ΚΑΤΩ ΚΟΙΛ ΓΥ'),                -- ΚΑΒΑΛΗ #2 (same day, diff dept)
         (2956163, N'ΥΠ ΘΥΡΕΟΕΙΔΟΥΣ'),                  -- ΚΑΡΑΜΟΥΤΣΙΟΣ
-        (2945443, N'ΥΠ ΜΑΣΤΩΝ');                        -- ΚΑΤΣΟΥΛΑ
+        (2945443, N'ΥΠ ΜΑΣΤΩΝ'),                       -- ΚΑΤΣΟΥΛΑ
+        (3000001, N'ΠΑΡΑΚΕΝΤΗΣΕΙΣ ΠΑΡΑΚ ΘΥΡΕΟΕΙΔ'),    -- ΚΑΡΑΜΟΥΤΣΙΟΣ (new)
+        (3000002, N'MRI ΟΜΣΣ'),                        -- ΚΑΤΣΟΥΛΑ (new)
+        (3000003, N'ΑΞ ΤΟΜΟ ΘΩΡΑΚΟΣ'),                 -- ΑΝΔΡΕΣΑΚΗ (new)
+        (3000004, N'ΥΠ ΑΝΩ ΚΟΙΛΙΑΣ'),                  -- ΓΕΩΡΓΙΟΥ (new)
+        (3000005, N'ΥΠ ΘΥΡΕΟΕΙΔΟΥΣ'),                  -- ΜΟΥΓΚΑΡΑΚΗΣ (new)
+        (3000006, N'ΥΠ ΜΑΣΤΩΝ');                       -- ΚΑΒΑΛΗ (new)
     PRINT 'Seed data inserted into [SCHEDULERDATAEXAM].';
 END
 GO

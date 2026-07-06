@@ -103,8 +103,7 @@ BEGIN
             ON lnm.SlisLabID = SR.LABORATORYID
         LEFT JOIN [KosmoSMS].[dbo].[DepartmentMap] AS dmap
             ON dmap.SlisGroupID = SR.SCHEDULERRESOURCESGROUPID
-        WHERE SC.DEMOGID IS NOT NULL
-          AND SC.DELETED = 0;
+        WHERE SC.DEMOGID IS NOT NULL;
 
         -- =======================================================
         -- Step 2: Upsert Patients (including Sex)
@@ -148,7 +147,7 @@ BEGIN
                     target.[Status]              = source.[Status],
                     target.[LabID]               = source.[LabID],
                     target.[LastSyncedAt]        = SYSUTCDATETIME()
-            WHEN NOT MATCHED BY TARGET THEN
+            WHEN NOT MATCHED BY TARGET AND source.[Status] != N'Cancelled' THEN
                 INSERT ([SlisAppointmentID], [PatientID], [AppointmentDateTime],
                         [Department], [Status], [LabID], [LastSyncedAt])
                 VALUES (source.[SlisAppointmentID], source.[PatientID],

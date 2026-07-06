@@ -12,9 +12,11 @@ BEGIN
     DROP DATABASE [KosmoSMS];
     PRINT 'Database [KosmoSMS] dropped.';
 END
+GO
 
 CREATE DATABASE [KosmoSMS];
 PRINT 'Database [KosmoSMS] created.';
+GO
 
 USE [KosmoSMS];
 GO

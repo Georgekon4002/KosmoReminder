@@ -54,8 +54,8 @@ FROM dbo.Appointments a
 INNER JOIN dbo.Patients p ON p.PatientID = a.PatientID
 LEFT  JOIN dbo.Labs     l ON l.LabID     = a.LabID
 WHERE
-    a.AppointmentDateTime > SYSUTCDATETIME()
-    AND a.AppointmentDateTime <= DATEADD(HOUR, ?, SYSUTCDATETIME())
+    a.AppointmentDateTime > SYSDATETIME()
+    AND a.AppointmentDateTime <= DATEADD(HOUR, ?, SYSDATETIME())
     AND a.Status NOT IN ('Cancelled', 'Completed')
     AND p.Phone IS NOT NULL
     AND LEN(LTRIM(RTRIM(p.Phone))) > 0
@@ -118,7 +118,7 @@ INSERT INTO dbo.Notifications
     (AppointmentID, MessageID, ChannelUsed, SentAt, Status)
 OUTPUT INSERTED.NotificationID
 VALUES
-    (?, ?, ?, SYSUTCDATETIME(), ?);
+    (?, ?, ?, SYSDATETIME(), ?);
 """
 
 
@@ -232,7 +232,7 @@ def notification_exists_pending(message_id: str) -> bool:
 _SQL_UPDATE_STATUS = """\
 UPDATE dbo.Notifications
 SET Status      = ?,
-    DeliveredAt = CASE WHEN ? = 'Delivered' THEN SYSUTCDATETIME() ELSE DeliveredAt END,
+    DeliveredAt = CASE WHEN ? = 'Delivered' THEN SYSDATETIME() ELSE DeliveredAt END,
     Cost        = COALESCE(?, Cost),
     MCC         = COALESCE(?, MCC),
     MNC         = COALESCE(?, MNC)
@@ -309,12 +309,27 @@ SELECT
 FROM dbo.Notifications;
 """
 
-def get_dashboard_stats() -> dict:
+_SQL_DASHBOARD_STATS_TODAY = """\
+SELECT 
+    COUNT(*) AS Total,
+    SUM(CASE WHEN Status = 'Sent' THEN 1 ELSE 0 END) AS Sent,
+    SUM(CASE WHEN Status = 'Delivered' THEN 1 ELSE 0 END) AS Delivered,
+    SUM(CASE WHEN Status IN ('Failed', 'Rejected') THEN 1 ELSE 0 END) AS Failed,
+    SUM(CASE WHEN Status = 'Pending' THEN 1 ELSE 0 END) AS Pending
+FROM dbo.Notifications
+WHERE CAST(SentAt AS DATE) = CAST(SYSDATETIME() AS DATE);
+"""
+
+def get_dashboard_stats(mode: str = 'all-time') -> dict:
     """Get aggregate statistics for the dashboard."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute(_SQL_DASHBOARD_STATS)
+        
+        if mode == 'today-sent':
+            cursor.execute(_SQL_DASHBOARD_STATS_TODAY)
+        else:
+            cursor.execute(_SQL_DASHBOARD_STATS)
         
         columns = [desc[0] for desc in cursor.description]
         row = cursor.fetchone()
@@ -351,12 +366,38 @@ LEFT JOIN dbo.Patients p ON a.PatientID = p.PatientID
 ORDER BY n.SentAt DESC;
 """
 
-def get_all_notifications(limit: int = 100) -> list[dict]:
+_SQL_TODAY_NOTIFICATIONS = """\
+SELECT TOP (?)
+    n.NotificationID,
+    n.MessageID,
+    n.ChannelUsed,
+    n.Status,
+    n.SentAt,
+    n.DeliveredAt,
+    n.Cost,
+    a.AppointmentDateTime,
+    a.ExamType,
+    a.Department,
+    p.FirstName,
+    p.LastName,
+    p.Phone
+FROM dbo.Notifications n
+LEFT JOIN dbo.Appointments a ON n.AppointmentID = a.AppointmentID
+LEFT JOIN dbo.Patients p ON a.PatientID = p.PatientID
+WHERE CAST(n.SentAt AS DATE) = CAST(SYSDATETIME() AS DATE)
+ORDER BY n.SentAt DESC;
+"""
+
+def get_all_notifications(limit: int = 100, mode: str = 'all-time') -> list[dict]:
     """Get the most recent notifications for the dashboard list."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute(_SQL_ALL_NOTIFICATIONS, (limit,))
+        
+        if mode == 'today-sent':
+            cursor.execute(_SQL_TODAY_NOTIFICATIONS, (limit,))
+        else:
+            cursor.execute(_SQL_ALL_NOTIFICATIONS, (limit,))
         
         columns = [desc[0] for desc in cursor.description]
         rows = []
@@ -380,3 +421,103 @@ def get_all_notifications(limit: int = 100) -> list[dict]:
     except Exception:
         logger.exception("Error fetching all notifications")
         return []
+
+_SQL_PENDING_APPOINTMENTS_TODAY = """\
+SELECT
+    STRING_AGG(a.ExamType, ', ') WITHIN GROUP (ORDER BY a.AppointmentDateTime)
+                                    AS ExamType,
+    MIN(a.AppointmentDateTime)      AS AppointmentDateTime,
+    STRING_AGG(CAST(a.AppointmentID AS NVARCHAR(20)), '|')
+                                    AS AppointmentIDs,
+    a.Department,
+    p.PatientID,
+    p.FirstName   AS PatientFirstName,
+    p.LastName    AS PatientLastName,
+    p.Phone,
+    p.Email,
+    p.Sex,
+    p.PreferredChannel,
+    l.LabID,
+    l.LabName,
+    l.LabAddress
+FROM dbo.Appointments a
+INNER JOIN dbo.Patients p ON p.PatientID = a.PatientID
+LEFT  JOIN dbo.Labs     l ON l.LabID     = a.LabID
+WHERE
+    a.AppointmentDateTime > SYSDATETIME()
+    AND CAST(a.AppointmentDateTime AS DATE) = CAST(DATEADD(DAY, 1, SYSDATETIME()) AS DATE)
+    AND a.Status NOT IN ('Cancelled', 'Completed')
+    AND p.Phone IS NOT NULL
+    AND LEN(LTRIM(RTRIM(p.Phone))) > 0
+    AND NOT EXISTS (
+        SELECT 1
+        FROM dbo.Notifications n
+        WHERE n.AppointmentID = a.AppointmentID
+          AND n.Status IN ('Sent', 'Delivered', 'Pending')
+    )
+GROUP BY
+    p.PatientID, p.FirstName, p.LastName, p.Phone, p.Email, p.Sex, p.PreferredChannel,
+    l.LabID, l.LabName, l.LabAddress, a.Department, CAST(a.AppointmentDateTime AS DATE)
+ORDER BY AppointmentDateTime;
+"""
+
+_SQL_PENDING_APPOINTMENTS_ALL = """\
+SELECT
+    STRING_AGG(a.ExamType, ', ') WITHIN GROUP (ORDER BY a.AppointmentDateTime)
+                                    AS ExamType,
+    MIN(a.AppointmentDateTime)      AS AppointmentDateTime,
+    STRING_AGG(CAST(a.AppointmentID AS NVARCHAR(20)), '|')
+                                    AS AppointmentIDs,
+    a.Department,
+    p.PatientID,
+    p.FirstName   AS PatientFirstName,
+    p.LastName    AS PatientLastName,
+    p.Phone,
+    p.Email,
+    p.Sex,
+    p.PreferredChannel,
+    l.LabID,
+    l.LabName,
+    l.LabAddress
+FROM dbo.Appointments a
+INNER JOIN dbo.Patients p ON p.PatientID = a.PatientID
+LEFT  JOIN dbo.Labs     l ON l.LabID     = a.LabID
+WHERE
+    a.AppointmentDateTime > SYSDATETIME()
+    AND a.Status NOT IN ('Cancelled', 'Completed')
+    AND p.Phone IS NOT NULL
+    AND LEN(LTRIM(RTRIM(p.Phone))) > 0
+    AND NOT EXISTS (
+        SELECT 1
+        FROM dbo.Notifications n
+        WHERE n.AppointmentID = a.AppointmentID
+          AND n.Status IN ('Sent', 'Delivered', 'Pending')
+    )
+GROUP BY
+    p.PatientID, p.FirstName, p.LastName, p.Phone, p.Email, p.Sex, p.PreferredChannel,
+    l.LabID, l.LabName, l.LabAddress, a.Department, CAST(a.AppointmentDateTime AS DATE)
+ORDER BY AppointmentDateTime;
+"""
+
+def get_pending_appointments(mode: str) -> list[dict]:
+    """Get pending appointments that have not received a notification yet."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        if mode == 'today':
+            cursor.execute(_SQL_PENDING_APPOINTMENTS_TODAY)
+        else:
+            cursor.execute(_SQL_PENDING_APPOINTMENTS_ALL)
+            
+        columns = [desc[0] for desc in cursor.description]
+        rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        cursor.close()
+        conn.close()
+        return rows
+        
+    except Exception:
+        logger.exception("Error fetching pending appointments")
+        return []
+

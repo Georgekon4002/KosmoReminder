@@ -1,6 +1,6 @@
-# KosmoSMS — Appointment Reminder System
+# KosmoSMS — Appointment Reminder System & Dashboard
 
-SMS/Viber reminder system for **Kosmoiatriki** diagnostic center. Syncs appointments from **Infomed Slis** and sends automated reminders via the **easysms.gr** API.
+SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. Syncs appointments from **Infomed Slis**, sends automated reminders via the **easysms.gr** API, and provides a desktop dashboard to monitor the status.
 
 ---
 
@@ -26,18 +26,18 @@ SMS/Viber reminder system for **Kosmoiatriki** diagnostic center. Syncs appointm
 │reminder_service│          │ callback_receiver   │
 │    .py         │          │    .py (Flask)      │
 │                │          │                     │
-│ Reads due      │          │ GET/POST            │
-│ appointments   │          │ /api/sms-callback   │
-│ every 15 min   │          │                     │
-└───────┬────────┘          └─────────▲───────────┘
-        │                             │
-        │  HTTP calls                 │ delivery report
-        ▼                             │ callback
-┌───────────────┐                     │
-│ easysms.gr    │─────────────────────┘
-│ API           │
-│ (Viber + SMS) │
-└───────────────┘
+│ Reads due      │          │ Provides Dashboard  │
+│ appointments   │          │ API & UI, plus      │
+│ every 15 min   │          │ /api/sms-callback   │
+└───────┬────────┘          └─────────▲───┬──────┘
+        │                             │   │
+        │  HTTP calls                 │   │ serves UI
+        ▼                             │   ▼
+┌───────────────┐                     │ ┌──────────────────┐
+│ easysms.gr    │─────────────────────┘ │ KosmoSMS         │
+│ API           │     delivery report   │ Dashboard (exe)  │
+│ (Viber + SMS) │     callback          │                  │
+└───────────────┘                       └──────────────────┘
 ```
 
 ### Components
@@ -46,7 +46,9 @@ SMS/Viber reminder system for **Kosmoiatriki** diagnostic center. Syncs appointm
 |-----------|-----------|-------------|
 | **Data Sync** | T-SQL Stored Procedure + SQL Agent | Pulls changed appointments from Slis via Linked Server every 5-15 min |
 | **Reminder Service** | `reminder_service.py` (Python) | Checks for due appointments, validates phones, sends Viber/SMS |
-| **Callback Receiver** | `callback_receiver.py` (Flask) | Receives delivery reports from easysms.gr, updates Notifications table |
+| **Dashboard & Webhook** | `callback_receiver.py` (Flask) | Serves the web dashboard UI/API, receives delivery reports from easysms.gr |
+| **Desktop Client** | `desktop_client.py` (pywebview) | A thin desktop application wrapper that connects to the Dashboard UI |
+| **Launcher** | `start_app.py` / `run.bat` | Starts all backend services and opens the Desktop UI simultaneously |
 
 ---
 
@@ -56,33 +58,6 @@ SMS/Viber reminder system for **Kosmoiatriki** diagnostic center. Syncs appointm
 - **Microsoft ODBC Driver for SQL Server** — [Download](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
 - **MS SQL Server** — Your own instance for the KosmoSMS database
 - **easysms.gr account** — [Sign up](https://easysms.gr/app/sign-up)
-
----
-
-## Project Structure
-
-```
-kosmosms/
-├── README.md
-├── .gitignore
-├── sql/
-│   ├── 001_CreateDatabase.sql      # Database schema (6 tables)
-│   ├── 002_LinkedServerSetup.sql   # Linked Server to Slis
-│   └── 003_SyncStoredProcedure.sql # Change Tracking sync SP
-├── puml/
-│   ├── architecture.puml           # High-level architecture diagram
-│   ├── erd.puml                    # Entity-relationship diagram
-│   ├── reminder_sequence.puml      # Reminder send flow
-│   └── sync_sequence.puml          # Slis sync flow
-└── src/
-    ├── requirements.txt            # Python dependencies
-    ├── .env.example                # Configuration template
-    ├── config.py                   # Central config loader
-    ├── database.py                 # SQL queries (pyodbc)
-    ├── easysms_client.py           # easysms.gr API client
-    ├── reminder_service.py         # Background reminder sender
-    └── callback_receiver.py        # Flask webhook receiver
-```
 
 ---
 
@@ -107,26 +82,27 @@ sql/003_SyncStoredProcedure.sql
 ### 2. Set up Python
 
 ```bash
-cd src
-
-# Create a virtual environment
+# Create a virtual environment at the root folder
 python -m venv venv
 venv\Scripts\activate       # Windows
-# source venv/bin/activate  # Linux/macOS
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (from src)
+pip install -r src/requirements.txt
+
+# Install pyinstaller for building the exe
+pip install pyinstaller
 ```
 
 ### 3. Configure
 
 ```bash
+cd src
 # Copy the template and fill in your values
 copy .env.example .env      # Windows
-# cp .env.example .env      # Linux/macOS
+cd ..
 ```
 
-Edit `.env` with your actual values:
+Edit `src/.env` with your actual values:
 
 ```ini
 DB_CONNECTION_STRING=DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=KosmoSMS;Trusted_Connection=yes;
@@ -134,27 +110,24 @@ EASYSMS_API_KEY=your_api_key_here
 CALLBACK_URL=https://your-public-domain.com/api/sms-callback
 ```
 
-### 4. Run
+### 4. Build and Run
 
-Open **two terminals** (both from the `src/` directory with the venv activated):
-
-**Terminal 1 — Reminder Service:**
+1. Build the Desktop Client (only needed once or when `desktop_client.py` changes):
 ```bash
-python reminder_service.py
+build.bat
 ```
 
-**Terminal 2 — Callback Receiver:**
+2. Run the full application (services + UI):
 ```bash
-python callback_receiver.py
+run.bat
 ```
-
-The callback receiver listens on `http://0.0.0.0:5000` by default.
+*(This starts `callback_receiver.py`, `reminder_service.py`, and launches the generated `KosmoSMS_Dashboard.exe`. Closing the UI will gracefully stop the backend services).*
 
 ---
 
 ## Configuration Reference
 
-All settings are in `.env` (loaded by `config.py`):
+All settings are in `src/.env` (loaded by `config.py`):
 
 ### Database
 
@@ -180,7 +153,7 @@ All settings are in `.env` (loaded by `config.py`):
 | `INTERVAL_MINUTES` | How often to check for due appointments | `15` |
 | `MESSAGE_TEMPLATE` | Greek message with `{PatientName}`, `{ExamType}`, `{DateTime}`, `{LabName}`, `{DoctorName}` placeholders | Greek template |
 
-### Callback Receiver
+### Callback Receiver / Dashboard
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -197,47 +170,6 @@ For production, consider:
 - **Environment variables** on the server
 - **Windows DPAPI** or a secrets manager
 - For development: keep secrets in `.env` (gitignored)
-
----
-
-## Deployment
-
-### Reminder Service as a Windows Service
-
-Use [NSSM (Non-Sucking Service Manager)](https://nssm.cc/) to run the Python script as a Windows service:
-
-```bash
-nssm install KosmoSMS-ReminderService "C:\path\to\venv\Scripts\python.exe" "C:\path\to\src\reminder_service.py"
-nssm set KosmoSMS-ReminderService AppDirectory "C:\path\to\src"
-nssm start KosmoSMS-ReminderService
-```
-
-### Callback Receiver
-
-For production, run Flask behind a proper WSGI server:
-
-```bash
-pip install waitress
-waitress-serve --host=0.0.0.0 --port=5000 callback_receiver:app
-```
-
-Or use NSSM to run it as a Windows service:
-
-```bash
-nssm install KosmoSMS-CallbackReceiver "C:\path\to\venv\Scripts\python.exe" "-m" "waitress" "--host=0.0.0.0" "--port=5000" "callback_receiver:app"
-nssm set KosmoSMS-CallbackReceiver AppDirectory "C:\path\to\src"
-nssm start KosmoSMS-CallbackReceiver
-```
-
-### Testing Callbacks Locally (ngrok)
-
-During development, use [ngrok](https://ngrok.com/) to expose your local callback receiver:
-
-```bash
-ngrok http 5000
-```
-
-Then set `CALLBACK_URL=https://abc123.ngrok.io/api/sms-callback` in your `.env`.
 
 ---
 
@@ -260,18 +192,23 @@ The reminder service wakes up, queries for appointments due within the next 24 h
 3. **Falls back to direct SMS** via `api/sms/send` only if the Viber API call itself fails (network error, invalid sender, etc.)
 4. **Logs the result** in the `Notifications` table with the message ID
 
-### 3. Receive Delivery Reports (`callback_receiver.py` — real-time)
+### 3. Dashboard and Webhook (`callback_receiver.py` — continuous)
 
-When easysms.gr delivers (or fails to deliver) a message, it calls back the webhook:
+This Flask application serves two main purposes:
+
+**a. Webhook for Delivery Reports**
+When easysms.gr delivers (or fails to deliver) a message, it calls back the webhook endpoint:
 ```
 GET /api/sms-callback?msgid=ABC123&status=delivered&cost=0.025&mcc=202&mnc=01
 ```
+The callback receiver looks up the pending notification by `msgid` and updates its status.
 
-The callback receiver:
-1. Validates the parameters
-2. Looks up the pending notification by `msgid`
-3. Updates the status to `Delivered`, `Failed`, or `Rejected`
-4. Returns `200 OK` (always, to prevent retries)
+**b. Dashboard UI and API**
+Serves the HTML dashboard on `http://localhost:5000/` and provides API endpoints (`/api/dashboard/stats`, `/api/dashboard/messages`) to poll for real-time status and message logs.
+
+### 4. Desktop Client (`desktop_client.py` / `start_app.py`)
+
+Provides a unified interface to the user. `start_app.py` runs the background scripts, while `KosmoSMS_Dashboard.exe` (built from `desktop_client.py`) opens a pywebview window pointing directly to the locally hosted dashboard, offering a native app feel.
 
 ---
 

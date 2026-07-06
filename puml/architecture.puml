@@ -25,9 +25,14 @@ package "Reminder Service (Python)" {
   [easysms_client.py] as ApiClient
 }
 
-package "Webhook Receiver (Flask / Python)" {
+package "Dashboard & Webhook Backend (Flask)" {
   [callback_receiver.py] as CallbackApp
   [GET/POST /api/sms-callback] as CallbackEndpoint
+  [Dashboard API & UI] as DashboardAPI
+}
+
+package "Desktop Client" {
+  [KosmoSMS_Dashboard.exe] as DesktopApp
 }
 
 cloud "easysms.gr API" {
@@ -50,6 +55,10 @@ ApiClient --> [api/sms/send] : direct SMS fallback
 ReminderScript --> [Notifications Table] : log sent status
 
 [api/sms/send] --> CallbackEndpoint : delivery report callback
-CallbackApp --> [Notifications Table] : update delivery status
+CallbackApp --> [Notifications Table] : reads/updates status
+DashboardAPI --> [Appointments Table] : reads pending
+DashboardAPI --> [Notifications Table] : reads sent
+
+DesktopApp --> DashboardAPI : renders Webview (http://localhost:5000)
 
 @enduml

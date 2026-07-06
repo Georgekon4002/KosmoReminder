@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,12 +14,14 @@
     <!-- Phosphor Icons for beautiful UI icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
+
 <body>
     <div class="dashboard-container">
         <!-- Sidebar or Header -->
         <header class="top-nav glass-panel">
             <div class="logo">
-                <i class="ph-fill ph-paper-plane-tilt"></i>
+                <img src="/static/images/KosmoSMS Logo.png" alt="KosmoSMS Logo"
+                    style="height: 32px; width: auto; filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5));">
                 <h1>KosmoSMS</h1>
             </div>
             <div class="user-info">
@@ -30,12 +33,18 @@
         </header>
 
         <main class="main-content">
+            <!-- Tab Navigation -->
+            <div class="tabs-container">
+                <button class="tab-btn active" data-mode="all-time">All Time</button>
+                <button class="tab-btn" data-mode="today">Today</button>
+            </div>
+
             <!-- Stats Grid -->
-            <section class="stats-grid">
-                <div class="stat-card glass-panel fade-in" style="--delay: 0.1s">
+            <section class="stats-grid" id="stats-section">
+                <div class="stat-card glass-panel fade-in" style="--delay: 0.1s" id="card-total">
                     <div class="stat-icon purple"><i class="ph ph-hash"></i></div>
                     <div class="stat-info">
-                        <h3>Total Processed</h3>
+                        <h3 id="stat-total-title">Total Processed</h3>
                         <p id="stat-total" class="stat-value">--</p>
                     </div>
                 </div>
@@ -75,18 +84,17 @@
                         <thead>
                             <tr>
                                 <th>Patient</th>
+                                <th>Time</th>
                                 <th>Phone</th>
-                                <th>Exam</th>
                                 <th>Channel</th>
                                 <th>Status</th>
                                 <th>Sent At</th>
-                                <th>Cost</th>
                             </tr>
                         </thead>
                         <tbody id="messages-tbody">
                             <!-- Rows will be populated by JS -->
                             <tr>
-                                <td colspan="7" class="loading-state">
+                                <td colspan="6" class="loading-state">
                                     <i class="ph ph-spinner-gap spin"></i> Loading data...
                                 </td>
                             </tr>
@@ -100,4 +108,5 @@
     <!-- App Logic -->
     <script src="/static/js/app.js"></script>
 </body>
+
 </html>
