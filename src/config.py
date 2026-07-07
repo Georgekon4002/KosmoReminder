@@ -77,6 +77,46 @@ class _Config:
     def CALLBACK_PORT(self) -> int:
         return int(os.environ.get("CALLBACK_PORT", "5000"))
 
+    # --- Email settings ---
+    @property
+    def SMTP_HOST(self) -> str:
+        return os.environ.get("SMTP_HOST", "")
+
+    @property
+    def SMTP_PORT(self) -> int:
+        return int(os.environ.get("SMTP_PORT", "587"))
+
+    @property
+    def SMTP_USER(self) -> str:
+        return os.environ.get("SMTP_USER", "")
+
+    @property
+    def SMTP_PASSWORD(self) -> str:
+        return os.environ.get("SMTP_PASSWORD", "")
+
+    @property
+    def SMTP_USE_TLS(self) -> bool:
+        return os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
+
+    @property
+    def EMAIL_FROM_ADDRESS(self) -> str:
+        return os.environ.get("EMAIL_FROM_ADDRESS", "")
+
+    @property
+    def EMAIL_FROM_NAME(self) -> str:
+        return os.environ.get("EMAIL_FROM_NAME", "Kosmoiatriki")
+
+    @property
+    def ORGANIZER_EMAIL(self) -> str:
+        return os.environ.get("ORGANIZER_EMAIL", "")
+
+    @property
+    def EMAIL_CONFIRMATION_SUBJECT_TEMPLATE(self) -> str:
+        return os.environ.get(
+            "EMAIL_CONFIRMATION_SUBJECT_TEMPLATE",
+            "Επιβεβαίωση ραντεβού - {DateTime}",
+        )
+
 
 # Singleton — import this everywhere
 cfg = _Config()

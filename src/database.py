@@ -296,6 +296,63 @@ def update_delivery_status(
         raise
 
 # =============================================================================
+# Email Queries
+# =============================================================================
+
+_SQL_UNSENT_EMAILS = """\
+SELECT
+    a.AppointmentID,
+    a.AppointmentDateTime,
+    a.Department,
+    p.PatientID,
+    p.FirstName AS PatientFirstName,
+    p.LastName AS PatientLastName,
+    p.Email,
+    l.LabName,
+    l.LabAddress
+FROM dbo.Appointments a
+INNER JOIN dbo.Patients p ON p.PatientID = a.PatientID
+LEFT JOIN dbo.Labs l ON l.LabID = a.LabID
+WHERE
+    a.EmailStatus IS NULL
+    AND a.AppointmentDateTime > SYSDATETIME()
+    AND a.Status NOT IN ('Cancelled', 'Completed');
+"""
+
+def get_unsent_emails() -> list[dict]:
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(_SQL_UNSENT_EMAILS)
+        columns = [desc[0] for desc in cursor.description]
+        rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+        return rows
+    except Exception:
+        logger.exception("Error querying unsent emails")
+        raise
+
+_SQL_UPDATE_EMAIL_STATUS = """\
+UPDATE dbo.Appointments
+SET EmailStatus = ?
+WHERE AppointmentID = ?;
+"""
+
+def update_email_status(appointment_id: int, status: str) -> None:
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(_SQL_UPDATE_EMAIL_STATUS, (status, appointment_id))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        logger.info("Updated EmailStatus for appointment %d to %s", appointment_id, status)
+    except Exception:
+        logger.exception("Error updating EmailStatus for appointment %d", appointment_id)
+
+
+# =============================================================================
 # Queries used by dashboard UI
 # =============================================================================
 
@@ -346,7 +403,7 @@ def get_dashboard_stats(mode: str = 'all-time') -> dict:
         return {"Total": 0, "Sent": 0, "Delivered": 0, "Failed": 0, "Pending": 0}
 
 _SQL_ALL_NOTIFICATIONS = """\
-SELECT TOP (?)
+SELECT
     n.NotificationID,
     n.MessageID,
     n.ChannelUsed,
@@ -357,17 +414,19 @@ SELECT TOP (?)
     a.AppointmentDateTime,
     a.ExamType,
     a.Department,
+    a.EmailStatus,
     p.FirstName,
     p.LastName,
     p.Phone
 FROM dbo.Notifications n
 LEFT JOIN dbo.Appointments a ON n.AppointmentID = a.AppointmentID
 LEFT JOIN dbo.Patients p ON a.PatientID = p.PatientID
-ORDER BY n.SentAt DESC;
+WHERE CAST(a.AppointmentDateTime AS DATE) >= ? AND CAST(a.AppointmentDateTime AS DATE) <= ?
+ORDER BY a.AppointmentDateTime ASC;
 """
 
 _SQL_TODAY_NOTIFICATIONS = """\
-SELECT TOP (?)
+SELECT
     n.NotificationID,
     n.MessageID,
     n.ChannelUsed,
@@ -378,6 +437,7 @@ SELECT TOP (?)
     a.AppointmentDateTime,
     a.ExamType,
     a.Department,
+    a.EmailStatus,
     p.FirstName,
     p.LastName,
     p.Phone
@@ -388,16 +448,16 @@ WHERE CAST(n.SentAt AS DATE) = CAST(SYSDATETIME() AS DATE)
 ORDER BY n.SentAt DESC;
 """
 
-def get_all_notifications(limit: int = 100, mode: str = 'all-time') -> list[dict]:
-    """Get the most recent notifications for the dashboard list."""
+def get_all_notifications(start_date: str = None, end_date: str = None, mode: str = 'all-time') -> list[dict]:
+    """Get a list of notifications for the dashboard list bounded by dates."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
         if mode == 'today-sent':
-            cursor.execute(_SQL_TODAY_NOTIFICATIONS, (limit,))
+            cursor.execute(_SQL_TODAY_NOTIFICATIONS)
         else:
-            cursor.execute(_SQL_ALL_NOTIFICATIONS, (limit,))
+            cursor.execute(_SQL_ALL_NOTIFICATIONS, (start_date, end_date))
         
         columns = [desc[0] for desc in cursor.description]
         rows = []
@@ -430,6 +490,7 @@ SELECT
     STRING_AGG(CAST(a.AppointmentID AS NVARCHAR(20)), '|')
                                     AS AppointmentIDs,
     a.Department,
+    a.EmailStatus,
     p.PatientID,
     p.FirstName   AS PatientFirstName,
     p.LastName    AS PatientLastName,
@@ -457,7 +518,7 @@ WHERE
     )
 GROUP BY
     p.PatientID, p.FirstName, p.LastName, p.Phone, p.Email, p.Sex, p.PreferredChannel,
-    l.LabID, l.LabName, l.LabAddress, a.Department, CAST(a.AppointmentDateTime AS DATE)
+    l.LabID, l.LabName, l.LabAddress, a.Department, a.EmailStatus, CAST(a.AppointmentDateTime AS DATE)
 ORDER BY AppointmentDateTime;
 """
 
@@ -469,6 +530,7 @@ SELECT
     STRING_AGG(CAST(a.AppointmentID AS NVARCHAR(20)), '|')
                                     AS AppointmentIDs,
     a.Department,
+    a.EmailStatus,
     p.PatientID,
     p.FirstName   AS PatientFirstName,
     p.LastName    AS PatientLastName,
@@ -483,7 +545,7 @@ FROM dbo.Appointments a
 INNER JOIN dbo.Patients p ON p.PatientID = a.PatientID
 LEFT  JOIN dbo.Labs     l ON l.LabID     = a.LabID
 WHERE
-    a.AppointmentDateTime > SYSDATETIME()
+    CAST(a.AppointmentDateTime AS DATE) >= ? AND CAST(a.AppointmentDateTime AS DATE) <= ?
     AND a.Status NOT IN ('Cancelled', 'Completed')
     AND p.Phone IS NOT NULL
     AND LEN(LTRIM(RTRIM(p.Phone))) > 0
@@ -495,11 +557,11 @@ WHERE
     )
 GROUP BY
     p.PatientID, p.FirstName, p.LastName, p.Phone, p.Email, p.Sex, p.PreferredChannel,
-    l.LabID, l.LabName, l.LabAddress, a.Department, CAST(a.AppointmentDateTime AS DATE)
+    l.LabID, l.LabName, l.LabAddress, a.Department, a.EmailStatus, CAST(a.AppointmentDateTime AS DATE)
 ORDER BY AppointmentDateTime;
 """
 
-def get_pending_appointments(mode: str) -> list[dict]:
+def get_pending_appointments(start_date: str = None, end_date: str = None, mode: str = 'all-time') -> list[dict]:
     """Get pending appointments that have not received a notification yet."""
     try:
         conn = get_connection()
@@ -508,7 +570,7 @@ def get_pending_appointments(mode: str) -> list[dict]:
         if mode == 'today':
             cursor.execute(_SQL_PENDING_APPOINTMENTS_TODAY)
         else:
-            cursor.execute(_SQL_PENDING_APPOINTMENTS_ALL)
+            cursor.execute(_SQL_PENDING_APPOINTMENTS_ALL, (start_date, end_date))
             
         columns = [desc[0] for desc in cursor.description]
         rows = [dict(zip(columns, row)) for row in cursor.fetchall()]

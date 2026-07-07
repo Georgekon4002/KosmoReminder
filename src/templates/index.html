@@ -87,6 +87,7 @@
                                 <th>Time</th>
                                 <th>Phone</th>
                                 <th>Channel</th>
+                                <th>Email Status</th>
                                 <th>Status</th>
                                 <th>Sent At</th>
                             </tr>
@@ -94,12 +95,19 @@
                         <tbody id="messages-tbody">
                             <!-- Rows will be populated by JS -->
                             <tr>
-                                <td colspan="6" class="loading-state">
+                                <td colspan="7" class="loading-state">
                                     <i class="ph ph-spinner-gap spin"></i> Loading data...
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+                
+                <!-- Pagination Controls -->
+                <div class="pagination-container" id="pagination-controls" style="display: none; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; padding: 1rem 0;">
+                    <button id="page-prev" class="btn-refresh" style="min-width: 100px;"><i class="ph ph-caret-left"></i> Prev Week</button>
+                    <span id="page-info" style="font-weight: 500;">Select Week</span>
+                    <button id="page-next" class="btn-refresh" style="min-width: 100px;">Next Week <i class="ph ph-caret-right"></i></button>
                 </div>
             </section>
         </main>

@@ -84,11 +84,30 @@ def dashboard_stats():
 @app.route("/api/dashboard/messages", methods=["GET"])
 def dashboard_messages():
     """Return recent notifications for the dashboard."""
+    from datetime import date, timedelta, datetime
     try:
         mode = request.args.get("mode", "all-time")
+        week_offset = int(request.args.get("weekOffset", 0))
+        
+        # Calculate Monday to Sunday boundaries for the given weekOffset
+        today = date.today()
+        start_of_current_week = today - timedelta(days=today.weekday()) # Monday
+        start_date_obj = start_of_current_week + timedelta(weeks=week_offset)
+        end_date_obj = start_date_obj + timedelta(days=6) # Sunday
+        
+        start_date_str = start_date_obj.strftime("%Y-%m-%d")
+        end_date_str = end_date_obj.strftime("%Y-%m-%d")
         
         messages = []
-        pending_groups = database.get_pending_appointments(mode)
+        if mode == 'today':
+            db_mode = 'today-sent'
+            pending_groups = database.get_pending_appointments(mode='today')
+            notifs = database.get_all_notifications(mode=db_mode)
+        else:
+            db_mode = 'all-time'
+            pending_groups = database.get_pending_appointments(start_date=start_date_str, end_date=end_date_str, mode='all-time')
+            notifs = database.get_all_notifications(start_date=start_date_str, end_date=end_date_str, mode='all-time')
+            
         for d in pending_groups:
             messages.append({
                 "FirstName": d.get("PatientFirstName", ""),
@@ -100,14 +119,30 @@ def dashboard_messages():
                 "Status": "Pending",
                 "SentAt": None,
                 "AppointmentDateTime": d.get("AppointmentDateTime").isoformat() if d.get("AppointmentDateTime") else None,
-                "Cost": None
+                "Cost": None,
+                "EmailStatus": d.get("EmailStatus")
             })
             
-        db_mode = 'today-sent' if mode == 'today' else 'all-time'
-        notifs = database.get_all_notifications(limit=100, mode=db_mode)
         messages.extend(notifs)
         
-        return jsonify(messages), 200
+        # Sort combined results by AppointmentDateTime ascending
+        def get_dt(msg):
+            dt = msg.get("AppointmentDateTime")
+            if dt:
+                # Remove Z or handle fractional seconds if any, but isoformat should be standard
+                return datetime.fromisoformat(dt.replace('Z', '+00:00'))
+            return datetime.max
+            
+        messages.sort(key=get_dt)
+        
+        return jsonify({
+            "messages": messages,
+            "pagination": {
+                "weekOffset": week_offset,
+                "startDate": start_date_str,
+                "endDate": end_date_str
+            }
+        }), 200
     except Exception:
         logger.exception("Error getting dashboard messages")
         return jsonify({"error": "Internal server error"}), 500

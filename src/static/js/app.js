@@ -10,6 +10,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabBtns = document.querySelectorAll('.tab-btn');
 
     let currentMode = 'all-time';
+    let currentWeekOffset = 0;
+
+    // Pagination DOM
+    const paginationControls = document.getElementById('pagination-controls');
+    const pagePrev = document.getElementById('page-prev');
+    const pageNext = document.getElementById('page-next');
+    const pageInfo = document.getElementById('page-info');
 
     // Format Date helper
     const formatDate = (isoString) => {
@@ -69,14 +76,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch and update table
     const fetchMessages = async () => {
         try {
-            const res = await fetch(`/api/dashboard/messages?mode=${currentMode}`);
+            const url = currentMode === 'today' 
+                ? `/api/dashboard/messages?mode=today`
+                : `/api/dashboard/messages?mode=all-time&weekOffset=${currentWeekOffset}`;
+                
+            const res = await fetch(url);
             if (!res.ok) throw new Error('Network response was not ok');
-            const data = await res.json();
+            const responseData = await res.json();
+            
+            const data = responseData.messages || [];
             
             tbody.innerHTML = ''; // Clear table
             
+            // Update pagination UI
+            if (currentMode === 'today') {
+                paginationControls.style.display = 'none';
+            } else {
+                const pagination = responseData.pagination || {};
+                paginationControls.style.display = 'flex';
+                
+                if (pagination.startDate && pagination.endDate) {
+                    const formatWeekDate = (ds) => {
+                        const d = new Date(ds);
+                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    };
+                    pageInfo.textContent = `${formatWeekDate(pagination.startDate)} - ${formatWeekDate(pagination.endDate)}`;
+                } else {
+                    pageInfo.textContent = `Week ${currentWeekOffset}`;
+                }
+                pagePrev.disabled = false;
+                pageNext.disabled = false;
+            }
+            
             if (data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="loading-state">No messages found.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="loading-state">No messages found.</td></tr>`;
                 return;
             }
 
@@ -97,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentApptGroup = apptDateOnly;
                     const groupTr = document.createElement('tr');
                     groupTr.className = 'group-header';
-                    groupTr.innerHTML = `<td colspan="6" style="background-color: rgba(255, 255, 255, 0.05); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--glass-border); color: var(--text-main);"><i class="ph ph-calendar-blank" style="vertical-align: middle; margin-right: 8px;"></i>${apptDateOnly === '-' ? 'No Appointment Date' : apptDateOnly}</td>`;
+                    groupTr.innerHTML = `<td colspan="7" style="background-color: rgba(255, 255, 255, 0.05); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--glass-border); color: var(--text-main);"><i class="ph ph-calendar-blank" style="vertical-align: middle; margin-right: 8px;"></i>${apptDateOnly === '-' ? 'No Appointment Date' : apptDateOnly}</td>`;
                     tbody.appendChild(groupTr);
                 }
 
@@ -112,6 +145,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const statusClass = msg.Status ? `status-${msg.Status.toLowerCase()}` : 'status-pending';
                 const statusText = msg.Status || 'Unknown';
 
+                // Email Status Badge
+                const emailStatus = msg.EmailStatus;
+                let emailBadge = '-';
+                if (emailStatus === 'sent') {
+                    emailBadge = `<span class="badge status-delivered">Sent</span>`;
+                } else if (emailStatus === 'failed') {
+                    emailBadge = `<span class="badge status-failed">Failed</span>`;
+                } else if (emailStatus === 'no_email') {
+                    emailBadge = `<span class="badge" style="background:var(--glass-border); color:var(--text-muted)">No Email</span>`;
+                } else {
+                    emailBadge = `<span class="badge status-pending">Pending</span>`;
+                }
+
                 tr.innerHTML = `
                     <td>
                         <div class="patient-cell">
@@ -122,15 +168,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${apptTimeOnly}</td>
                     <td>${msg.Phone || '-'}</td>
                     <td>${msg.ChannelUsed || 'SMS'}</td>
+                    <td>${emailBadge}</td>
                     <td><span class="badge ${statusClass}">${statusText}</span></td>
                     <td>${formatDate(msg.SentAt)}</td>
                 `;
                 tbody.appendChild(tr);
             });
 
+
+
         } catch (error) {
             console.error('Error fetching messages:', error);
-            tbody.innerHTML = `<tr><td colspan="6" class="loading-state" style="color: var(--accent-red)">Error loading data.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="loading-state" style="color: var(--accent-red)">Error loading data.</td></tr>`;
         }
     };
 
@@ -152,6 +201,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event Listeners
     refreshBtn.addEventListener('click', refreshDashboard);
 
+    pagePrev.addEventListener('click', () => {
+        currentWeekOffset--;
+        refreshDashboard();
+    });
+
+    pageNext.addEventListener('click', () => {
+        currentWeekOffset++;
+        refreshDashboard();
+    });
+
     tabBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
             // Update active state
@@ -160,9 +219,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Update mode and fetch
             currentMode = e.target.getAttribute('data-mode');
+            currentWeekOffset = 0; // Reset to current week on tab change
             
             // Show loading state immediately
-            tbody.innerHTML = `<tr><td colspan="6" class="loading-state"><i class="ph ph-spinner-gap spin"></i> Loading data...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="loading-state"><i class="ph ph-spinner-gap spin"></i> Loading data...</td></tr>`;
             
             refreshDashboard();
         });

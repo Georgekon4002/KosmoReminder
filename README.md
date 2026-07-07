@@ -22,22 +22,22 @@ SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. 
      ┌───────────┘       └───────────┐
      │                               │
      ▼                               ▼
-┌────────────────┐          ┌────────────────────┐
-│reminder_service│          │ callback_receiver   │
-│    .py         │          │    .py (Flask)      │
-│                │          │                     │
-│ Reads due      │          │ Provides Dashboard  │
-│ appointments   │          │ API & UI, plus      │
-│ every 15 min   │          │ /api/sms-callback   │
-└───────┬────────┘          └─────────▲───┬──────┘
-        │                             │   │
-        │  HTTP calls                 │   │ serves UI
-        ▼                             │   ▼
-┌───────────────┐                     │ ┌──────────────────┐
-│ easysms.gr    │─────────────────────┘ │ KosmoSMS         │
-│ API           │     delivery report   │ Dashboard (exe)  │
-│ (Viber + SMS) │     callback          │                  │
-└───────────────┘                       └──────────────────┘
+┌────────────────┐          ┌────────────────┐          ┌────────────────────┐
+│reminder_service│          │ email_reminder_│          │ callback_receiver  │
+│    .py         │          │ service.py     │          │    .py (Flask)     │
+│                │          │                │          │                    │
+│ Reads due      │          │ Reads newly    │          │ Provides Dashboard │
+│ appointments   │          │ synced appts   │          │ API & UI, plus     │
+│ every 15 min   │          │ every 5 min    │          │ /api/sms-callback  │
+└───────┬────────┘          └────────┬───────┘          └─────────▲───┬──────┘
+        │                            │                            │   │
+        │  HTTP calls                │ SMTP (Email)               │   │ serves UI
+        ▼                            ▼                            │   ▼
+┌───────────────┐           ┌────────────────┐                    │ ┌──────────────────┐
+│ easysms.gr    │───────────┤ SMTP Server    │────────────────────┘ │ KosmoSMS         │
+│ API           │ delivery  │                │                      │ Dashboard (exe)  │
+│ (Viber + SMS) │ report    └────────────────┘                      │                  │
+└───────────────┘                                                   └──────────────────┘
 ```
 
 ### Components
@@ -46,9 +46,11 @@ SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. 
 |-----------|-----------|-------------|
 | **Data Sync** | T-SQL Stored Procedure + SQL Agent | Pulls changed appointments from Slis via Linked Server every 5-15 min |
 | **Reminder Service** | `reminder_service.py` (Python) | Checks for due appointments, validates phones, sends Viber/SMS |
+| **Email Service** | `email_reminder_service.py` (Python) | Checks for new appointments and sends one-time confirmation email with calendar invite |
 | **Dashboard & Webhook** | `callback_receiver.py` (Flask) | Serves the web dashboard UI/API, receives delivery reports from easysms.gr |
-| **Desktop Client** | `desktop_client.py` (pywebview) | A thin desktop application wrapper that connects to the Dashboard UI |
-| **Launcher** | `start_app.py` / `run.bat` | Starts all backend services and opens the Desktop UI simultaneously |
+| **Desktop Client** | `desktop_client.py` | A thin desktop application wrapper that connects to the Dashboard UI |
+| **Service Installer** | `install_services.ps1` | PowerShell script that uses NSSM to install the Python backends as Windows Services |
+| **Launcher** | `start_app.py` / `run.bat` | Starts the Desktop UI viewer |
 
 ---
 
@@ -117,11 +119,19 @@ CALLBACK_URL=https://your-public-domain.com/api/sms-callback
 build.bat
 ```
 
-2. Run the full application (services + UI):
+2. Install the Background Services (Run as Administrator):
+```powershell
+.\install_services.ps1
+```
+*(This will download NSSM and install `reminder_service.py` and `callback_receiver.py` as auto-restarting Windows Services).*
+
+3. Run the Dashboard UI:
 ```bash
 run.bat
 ```
-*(This starts `callback_receiver.py`, `reminder_service.py`, and launches the generated `KosmoSMS_Dashboard.exe`. Closing the UI will gracefully stop the backend services).*
+*(This launches the generated `KosmoSMS_Dashboard.exe` viewer. The backend services will continue running even if the UI is closed).*
+
+> **[TODO: Add screenshots of the new paginated Dashboard UI here]**
 
 ---
 
@@ -152,6 +162,20 @@ All settings are in `src/.env` (loaded by `config.py`):
 | `LEAD_TIME_HOURS` | Hours before appointment to send reminder | `24` |
 | `INTERVAL_MINUTES` | How often to check for due appointments | `15` |
 | `MESSAGE_TEMPLATE` | Greek message with `{PatientName}`, `{ExamType}`, `{DateTime}`, `{LabName}`, `{DoctorName}` placeholders | Greek template |
+
+### Email Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SMTP_HOST` | SMTP Server Host | *(empty)* |
+| `SMTP_PORT` | SMTP Server Port | `587` |
+| `SMTP_USER` | SMTP Username | *(empty)* |
+| `SMTP_PASSWORD` | SMTP Password | *(empty)* |
+| `SMTP_USE_TLS` | Use TLS for SMTP connection | `true` |
+| `EMAIL_FROM_ADDRESS` | Sender email address | *(empty)* |
+| `EMAIL_FROM_NAME` | Sender display name | `Kosmoiatriki` |
+| `ORGANIZER_EMAIL` | Organizer email for calendar invites | *(empty)* |
+| `EMAIL_CONFIRMATION_SUBJECT_TEMPLATE` | Subject template for confirmation email | `Επιβεβαίωση ραντεβού - {DateTime}` |
 
 ### Callback Receiver / Dashboard
 
@@ -192,7 +216,15 @@ The reminder service wakes up, queries for appointments due within the next 24 h
 3. **Falls back to direct SMS** via `api/sms/send` only if the Viber API call itself fails (network error, invalid sender, etc.)
 4. **Logs the result** in the `Notifications` table with the message ID
 
-### 3. Dashboard and Webhook (`callback_receiver.py` — continuous)
+### 3. Send Confirmation Emails (`email_reminder_service.py` — every 5 minutes)
+
+The email service wakes up and queries for appointments that have not yet had an email sent (`EmailStatus IS NULL`). For each:
+1. It checks if the patient has an email on file. If not, it updates `EmailStatus` to `no_email`.
+2. It builds a `.ics` calendar payload with the appointment details.
+3. It sends a multipart email containing the calendar invite.
+4. It updates `EmailStatus` to `sent` or `failed`. This is a one-time operation.
+
+### 4. Dashboard and Webhook (`callback_receiver.py` — continuous)
 
 This Flask application serves two main purposes:
 
@@ -204,11 +236,11 @@ GET /api/sms-callback?msgid=ABC123&status=delivered&cost=0.025&mcc=202&mnc=01
 The callback receiver looks up the pending notification by `msgid` and updates its status.
 
 **b. Dashboard UI and API**
-Serves the HTML dashboard on `http://localhost:5000/` and provides API endpoints (`/api/dashboard/stats`, `/api/dashboard/messages`) to poll for real-time status and message logs.
+Serves the HTML dashboard on `http://localhost:5000/` and provides API endpoints (`/api/dashboard/stats`, `/api/dashboard/messages`) to poll for real-time status and message logs, including Email Status.
 
-### 4. Desktop Client (`desktop_client.py` / `start_app.py`)
+### 5. Desktop Client (`desktop_client.py` / `start_app.py`)
 
-Provides a unified interface to the user. `start_app.py` runs the background scripts, while `KosmoSMS_Dashboard.exe` (built from `desktop_client.py`) opens a pywebview window pointing directly to the locally hosted dashboard, offering a native app feel.
+Provides a unified interface to the user. Since the backend now runs reliably via Windows Services (NSSM), `start_app.py` simply launches `KosmoSMS_Dashboard.exe`. This executable opens a pywebview window pointing directly to the locally hosted dashboard (`http://localhost:5000/`), offering a native app feel.
 
 ---
 
