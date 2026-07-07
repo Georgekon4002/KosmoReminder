@@ -411,6 +411,7 @@ SELECT
     n.SentAt,
     n.DeliveredAt,
     n.Cost,
+    a.AppointmentID,
     a.AppointmentDateTime,
     a.ExamType,
     a.Department,
@@ -434,6 +435,7 @@ SELECT
     n.SentAt,
     n.DeliveredAt,
     n.Cost,
+    a.AppointmentID,
     a.AppointmentDateTime,
     a.ExamType,
     a.Department,
@@ -582,4 +584,101 @@ def get_pending_appointments(start_date: str = None, end_date: str = None, mode:
     except Exception:
         logger.exception("Error fetching pending appointments")
         return []
+
+_SQL_APPOINTMENT_FOR_EMAIL = """\
+SELECT
+    a.AppointmentID,
+    a.AppointmentDateTime,
+    a.Department,
+    p.PatientID,
+    p.FirstName AS PatientFirstName,
+    p.LastName AS PatientLastName,
+    p.Email,
+    l.LabName,
+    l.LabAddress
+FROM dbo.Appointments a
+INNER JOIN dbo.Patients p ON p.PatientID = a.PatientID
+LEFT JOIN dbo.Labs l ON l.LabID = a.LabID
+WHERE a.AppointmentID = ?;
+"""
+
+def get_appointment_for_email(appointment_id: int) -> Optional[dict]:
+    """Fetch appointment details needed to send an email."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(_SQL_APPOINTMENT_FOR_EMAIL, (appointment_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            cursor.close()
+            conn.close()
+            return None
+            
+        columns = [desc[0] for desc in cursor.description]
+        result = dict(zip(columns, row))
+        
+        cursor.close()
+        conn.close()
+        return result
+    except Exception:
+        logger.exception("Error fetching appointment for email (ID: %s)", appointment_id)
+        return None
+
+_SQL_APPOINTMENT_GROUP_BY_IDS = """\
+SELECT
+    STRING_AGG(a.ExamType, ', ') WITHIN GROUP (ORDER BY a.AppointmentDateTime)
+                                    AS ExamType,
+    MIN(a.AppointmentDateTime)      AS AppointmentDateTime,
+    STRING_AGG(CAST(a.AppointmentID AS NVARCHAR(20)), '|')
+                                    AS AppointmentIDs,
+    a.Department,
+    p.PatientID,
+    p.FirstName   AS PatientFirstName,
+    p.LastName    AS PatientLastName,
+    p.Phone,
+    p.Email,
+    p.Sex,
+    p.PreferredChannel,
+    l.LabID,
+    l.LabName,
+    l.LabAddress
+FROM dbo.Appointments a
+INNER JOIN dbo.Patients p ON p.PatientID = a.PatientID
+LEFT  JOIN dbo.Labs     l ON l.LabID     = a.LabID
+WHERE a.AppointmentID IN ({})
+GROUP BY
+    p.PatientID, p.FirstName, p.LastName, p.Phone, p.Email, p.Sex, p.PreferredChannel,
+    l.LabID, l.LabName, l.LabAddress, a.Department, CAST(a.AppointmentDateTime AS DATE)
+ORDER BY AppointmentDateTime;
+"""
+
+def get_appointment_group_by_ids(appointment_ids: list[int]) -> Optional[dict]:
+    """Fetch appointment group details needed to send an SMS."""
+    if not appointment_ids:
+        return None
+        
+    try:
+        placeholders = ','.join('?' * len(appointment_ids))
+        query = _SQL_APPOINTMENT_GROUP_BY_IDS.format(placeholders)
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(query, appointment_ids)
+        row = cursor.fetchone()
+        
+        if not row:
+            cursor.close()
+            conn.close()
+            return None
+            
+        columns = [desc[0] for desc in cursor.description]
+        result = dict(zip(columns, row))
+        
+        cursor.close()
+        conn.close()
+        return result
+    except Exception:
+        logger.exception("Error fetching appointment group by IDs: %s", appointment_ids)
+        return None
 

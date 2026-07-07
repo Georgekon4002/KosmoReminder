@@ -120,9 +120,12 @@ def dashboard_messages():
                 "SentAt": None,
                 "AppointmentDateTime": d.get("AppointmentDateTime").isoformat() if d.get("AppointmentDateTime") else None,
                 "Cost": None,
-                "EmailStatus": d.get("EmailStatus")
+                "EmailStatus": d.get("EmailStatus"),
+                "AppointmentIDs": d.get("AppointmentIDs")
             })
             
+        for n in notifs:
+            n["AppointmentIDs"] = str(n.get("AppointmentID", ""))
         messages.extend(notifs)
         
         # Sort combined results by AppointmentDateTime ascending
@@ -145,6 +148,52 @@ def dashboard_messages():
         }), 200
     except Exception:
         logger.exception("Error getting dashboard messages")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/send-sms", methods=["POST"])
+def send_sms():
+    try:
+        data = request.get_json()
+        raw_ids = data.get("appointment_ids")
+        if not raw_ids:
+            return jsonify({"error": "Missing appointment_ids"}), 400
+            
+        import reminder_service
+        appt_ids = [int(x) for x in str(raw_ids).split("|") if x.strip().isdigit()]
+        group = database.get_appointment_group_by_ids(appt_ids)
+        if group:
+            reminder_service.send_reminder_for_group(group)
+            return jsonify({"status": "ok"}), 200
+        return jsonify({"error": "Group not found"}), 404
+    except Exception:
+        logger.exception("Error in send-sms")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/send-email", methods=["POST"])
+def send_email():
+    try:
+        data = request.get_json()
+        raw_ids = data.get("appointment_ids")
+        if not raw_ids:
+            return jsonify({"error": "Missing appointment_ids"}), 400
+            
+        import email_reminder_service
+        # Get first ID if it's a pipe-separated list
+        appt_id = int(str(raw_ids).split("|")[0])
+        appt = database.get_appointment_for_email(appt_id)
+        if appt:
+            success = email_reminder_service.send_email(appt)
+            if success:
+                database.update_email_status(appt_id, "sent")
+                return jsonify({"status": "ok"}), 200
+            else:
+                database.update_email_status(appt_id, "failed")
+                return jsonify({"error": "Failed to send email"}), 500
+        return jsonify({"error": "Appointment not found"}), 404
+    except Exception:
+        logger.exception("Error in send-email")
         return jsonify({"error": "Internal server error"}), 500
 
 

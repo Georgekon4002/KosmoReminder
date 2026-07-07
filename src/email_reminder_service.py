@@ -51,7 +51,7 @@ def send_email(appointment: dict) -> bool:
         msg['From'] = f"{cfg.EMAIL_FROM_NAME} <{cfg.EMAIL_FROM_ADDRESS}>"
         msg['To'] = patient_email
         msg['Date'] = formatdate(localtime=True)
-        msg['Message-ID'] = f"<{uuid.uuid4()}@{cfg.EMAIL_FROM_ADDRESS.split('@')[-1] if '@' in cfg.EMAIL_FROM_ADDRESS else 'kosmoiatriki.com'}>"
+        msg['Message-ID'] = f"<{uuid.uuid4()}@{cfg.EMAIL_FROM_ADDRESS.split('@')[-1] if '@' in cfg.EMAIL_FROM_ADDRESS else 'kosmoiatriki.gr'}>"
 
         department = appointment.get("Department") or "Τμήμα"
         lab_name = appointment.get("LabName") or "το εργαστήριο μας"
@@ -118,7 +118,7 @@ def send_email(appointment: dict) -> bool:
         ics_data = calendar_invite.build_ics(appointment)
         
         # Add as alternative for email clients that render requests
-        msg.add_alternative(ics_data, maintype='text', subtype='calendar', method='REQUEST', charset='utf-8')
+        msg.add_alternative(ics_data.decode('utf-8'), subtype='calendar', params={'method': 'REQUEST'})
         
         # Also add as an attachment for older clients
         msg.add_attachment(ics_data, maintype='text', subtype='calendar', filename='invite.ics')
