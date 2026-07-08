@@ -8,14 +8,13 @@ and sends a one-time email with a calendar invite (.ics).
 import logging
 import sys
 import time
-import smtplib
-from email.message import EmailMessage
-from email.utils import formatdate
+import resend
 import uuid
 
 import database
 import calendar_invite
 from config import cfg
+from reminder_service import build_greeting
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -32,107 +31,112 @@ logging.basicConfig(
 )
 logger = logging.getLogger("email_reminder_service")
 
+months_gr = ["", "Ιανουαρίου", "Φεβρουαρίου", "Μαρτίου", "Απριλίου", "Μαΐου", "Ιουνίου", "Ιουλίου", "Αυγούστου", "Σεπτεμβρίου", "Οκτωβρίου", "Νοεμβρίου", "Δεκεμβρίου"]
+days_gr = ["Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο", "Κυριακή"]
+
 def send_email(appointment: dict) -> bool:
-    """Send calendar invite email. Returns True on success, False on failure."""
+    """Send calendar invite email using Resend. Returns True on success, False on failure."""
     patient_email = appointment.get("Email")
     if not patient_email:
         return False
         
+    resend.api_key = cfg.RESEND_API_KEY
+        
     try:
-        # Build message
-        msg = EmailMessage()
-        
-        # Format Subject
         appt_dt = appointment.get("AppointmentDateTime")
-        dt_str = appt_dt.strftime("%d/%m/%Y %H:%M") if appt_dt else ""
-        subject = cfg.EMAIL_CONFIRMATION_SUBJECT_TEMPLATE.replace("{DateTime}", dt_str)
-        
-        msg['Subject'] = subject
-        msg['From'] = f"{cfg.EMAIL_FROM_NAME} <{cfg.EMAIL_FROM_ADDRESS}>"
-        msg['To'] = patient_email
-        msg['Date'] = formatdate(localtime=True)
-        msg['Message-ID'] = f"<{uuid.uuid4()}@{cfg.EMAIL_FROM_ADDRESS.split('@')[-1] if '@' in cfg.EMAIL_FROM_ADDRESS else 'kosmoiatriki.gr'}>"
-
+        if appt_dt:
+            day_name = days_gr[appt_dt.weekday()]
+            month_name = months_gr[appt_dt.month]
+            dt_str = f"{day_name}, {appt_dt.day} {month_name} {appt_dt.year}, {appt_dt.strftime('%H:%M')}"
+            subject_dt_str = appt_dt.strftime("%d/%m/%Y %H:%M")
+        else:
+            dt_str = ""
+            subject_dt_str = ""
+            
         department = appointment.get("Department") or "Τμήμα"
+        subject = cfg.EMAIL_CONFIRMATION_SUBJECT_TEMPLATE.replace("{DateTime}", subject_dt_str).replace("{Department}", department)
+        
         lab_name = appointment.get("LabName") or "το εργαστήριο μας"
         
-        body_text = f"Γεια σας,\n\nΣας επιβεβαιώνουμε το ραντεβού σας στο {department} της Μονάδας {lab_name} για τις {dt_str}.\n\nΜπορείτε να προσθέσετε το ραντεβού στο ημερολόγιό σας ανοίγοντας το συνημμένο αρχείο."
-        msg.set_content(body_text)
-
-        body_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <style>
-                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 40px 20px; }}
-                .container {{ max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; }}
-                .header {{ background-color: #ffffff; padding: 30px; text-align: center; border-bottom: 1px solid #eaeaea; }}
-                .content {{ padding: 40px 30px; text-align: center; }}
-                .title {{ color: #1a1a1a; font-size: 24px; font-weight: 600; margin: 0 0 10px 0; }}
-                .subtitle {{ color: #666666; font-size: 16px; margin: 0 0 30px 0; }}
-                .card {{ background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 25px; margin-bottom: 30px; text-align: left; }}
-                .footer {{ background-color: #f8fafc; padding: 20px; text-align: center; color: #94a3b8; font-size: 13px; border-top: 1px solid #eaeaea; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h2 style="color: #2563eb; margin: 0; font-size: 28px; letter-spacing: -0.5px;">Kosmoiatriki</h2>
-                </div>
-                <div class="content">
-                    <h1 class="title">Επιβεβαίωση Ραντεβού</h1>
-                    <p class="subtitle">Το ραντεβού σας καταχωρήθηκε με επιτυχία.</p>
-                    
-                    <div class="card">
-                        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
-                            <tr>
-                                <td style="padding-bottom: 15px; color: #64748b; font-size: 14px; width: 40%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Ημερομηνία & Ωρα</td>
-                                <td style="padding-bottom: 15px; color: #0f172a; font-size: 15px; font-weight: 600;">{dt_str}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding-bottom: 15px; color: #64748b; font-size: 14px; width: 40%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Τμήμα</td>
-                                <td style="padding-bottom: 15px; color: #0f172a; font-size: 15px; font-weight: 600;">{department}</td>
-                            </tr>
-                            <tr>
-                                <td style="color: #64748b; font-size: 14px; width: 40%; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Μονάδα</td>
-                                <td style="color: #0f172a; font-size: 15px; font-weight: 600;">{lab_name}</td>
-                            </tr>
-                        </table>
-                    </div>
-                    
-                    <p style="color: #475569; font-size: 15px; margin-bottom: 25px; line-height: 1.5;">
-                        Βρείτε επισυναπτόμενο το αρχείο <strong>invite.ics</strong> για να προσθέσετε το ραντεβού στο προσωπικό σας ημερολόγιο (Google Calendar, Outlook, Apple Calendar).
-                    </p>
-                </div>
-                <div class="footer">
-                    &copy; {appt_dt.year if appt_dt else '2026'} Kosmoiatriki. Όλα τα δικαιώματα διατηρούνται.
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        msg.add_alternative(body_html, subtype='html')
+        first_name = appointment.get("PatientFirstName", "")
+        last_name = appointment.get("PatientLastName", "")
+        sex = appointment.get("Sex")
+        greeting = build_greeting(first_name, last_name, sex)
         
-        # Attach .ics
-        ics_data = calendar_invite.build_ics(appointment)
+        lab_address_db = appointment.get("LabAddress") or "Αθήνα"
         
-        # Add as alternative for email clients that render requests
-        msg.add_alternative(ics_data.decode('utf-8'), subtype='calendar', params={'method': 'REQUEST'})
-        
-        # Also add as an attachment for older clients
-        msg.add_attachment(ics_data, maintype='text', subtype='calendar', filename='invite.ics')
-        
-        # Send
-        if cfg.SMTP_USE_TLS:
-            with smtplib.SMTP(cfg.SMTP_HOST, cfg.SMTP_PORT) as server:
-                server.starttls()
-                server.login(cfg.SMTP_USER, cfg.SMTP_PASSWORD)
-                server.send_message(msg)
+        # Build map link and address
+        if "Κυψέλη" in lab_name:
+            directions_url = "https://maps.app.goo.gl/9QZJ2qH9n9w3XQ9E8"
+            lab_address = lab_address_db if lab_address_db != "Αθήνα" else "Πατησίων 237, Κυψέλη 112 54"
+        elif "Πατήσια" in lab_name:
+            directions_url = "https://maps.app.goo.gl/3XQ9E89QZJ2qH9n9w"
+            lab_address = lab_address_db if lab_address_db != "Αθήνα" else "Λεωφ. Γαλατσίου 13, Πατήσια 111 41"
+        elif "Περιστέρι" in lab_name:
+            directions_url = "https://maps.app.goo.gl/9w3XQ9E89QZJ2qH9n"
+            lab_address = lab_address_db if lab_address_db != "Αθήνα" else "Θηβών 153, Περιστέρι 121 34"
         else:
-            with smtplib.SMTP(cfg.SMTP_HOST, cfg.SMTP_PORT) as server:
-                server.login(cfg.SMTP_USER, cfg.SMTP_PASSWORD)
-                server.send_message(msg)
+            import urllib.parse
+            directions_url = f"https://maps.google.com/?q={urllib.parse.quote(lab_address_db)}"
+            lab_address = lab_address_db
+
+        # Build calendar link
+        import urllib.parse
+        gcal_title = urllib.parse.quote(f"Ραντεβού στην Κοσμοϊατρική ({department})")
+        if appt_dt:
+            from datetime import timedelta
+            gcal_start = appt_dt.strftime("%Y%m%dT%H%M%S")
+            gcal_end = (appt_dt + timedelta(minutes=30)).strftime("%Y%m%dT%H%M%S")
+            calendar_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={gcal_title}&dates={gcal_start}/{gcal_end}&details=&location={urllib.parse.quote(lab_name)}"
+        else:
+            calendar_url = "#"
+        
+        # Build .ics attachment
+        ics_data = calendar_invite.build_ics(appointment)
+        attachments = [
+            {
+                "filename": "invite.ics",
+                "content": list(ics_data) # Resend accepts list of integers for bytes
+            }
+        ]
+        
+        params = {
+            "from": f"{cfg.EMAIL_FROM_NAME} <{cfg.EMAIL_FROM_ADDRESS}>",
+            "to": patient_email,
+            "subject": subject,
+            "attachments": attachments
+        }
+        
+        if cfg.RESEND_TEMPLATE_ID:
+            params["template"] = {
+                "id": cfg.RESEND_TEMPLATE_ID,
+                "variables": {
+                    "greeting": greeting,
+                    "exam_type": department,
+                    "datetime": dt_str,
+                    "lab_name": lab_name,
+                    "lab_address": lab_address,
+                    "directions_url": directions_url,
+                    "calendar_url": calendar_url
+                }
+            }
+        else:
+            template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "mail.html")
+            with open(template_path, "r", encoding="utf-8") as f:
+                body_html = f.read()
+            
+            body_html = body_html.replace("{{{greeting}}}", greeting)
+            body_html = body_html.replace("{{{exam_type}}}", department)
+            body_html = body_html.replace("{{{datetime}}}", dt_str)
+            body_html = body_html.replace("{{{lab_name}}}", lab_name)
+            body_html = body_html.replace("{{{lab_address}}}", lab_address)
+            body_html = body_html.replace("{{{directions_url}}}", directions_url)
+            body_html = body_html.replace("{{{calendar_url}}}", calendar_url)
+            
+            params["html"] = body_html
+
+        email_response = resend.Emails.send(params)
+        logger.info("Email sent via Resend. ID: %s", email_response.get("id"))
                 
         return True
     except Exception:

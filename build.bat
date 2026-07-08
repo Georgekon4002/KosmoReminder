@@ -1,5 +1,10 @@
 @echo off
-echo Building KosmoSMS Dashboard...
-python -m PyInstaller KosmoSMS_Dashboard.spec --clean -y
+echo Building KosmoReminder...
+python -m PyInstaller KosmoReminder.spec --clean -y
+if %errorlevel% neq 0 (
+    echo Build failed!
+    pause
+    exit /b %errorlevel%
+)
 echo Build completed successfully.
 pause

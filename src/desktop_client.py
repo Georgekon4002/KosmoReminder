@@ -3,7 +3,7 @@ import webview
 
 def main():
     """
-    Start a thin desktop client for the KosmoSMS Dashboard.
+    Start a thin desktop client for the KosmoReminder Dashboard.
     
     By default it points to http://localhost:5000/
     You can override this by passing the URL as a command line argument.
@@ -15,7 +15,7 @@ def main():
 
     # Create the native desktop window
     webview.create_window(
-        title="KosmoSMS Dashboard",
+        title="KosmoReminder",
         url=target_url,
         width=1280,
         height=800,

@@ -3,7 +3,7 @@ import sys
 import os
 
 def main():
-    exe_path = os.path.join("dist", "KosmoSMS_Dashboard.exe")
+    exe_path = os.path.join("dist", "KosmoReminder.exe")
     
     if not os.path.exists(exe_path):
         print(f"Error: Executable not found at {exe_path}")
@@ -11,7 +11,7 @@ def main():
         input("Press Enter to exit...")
         sys.exit(1)
         
-    print("Starting KosmoSMS Dashboard...")
+    print("Starting KosmoReminder Dashboard...")
     dashboard = subprocess.Popen([exe_path])
     
     try:

@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let emailBadge = '-';
                 let showEmailButton = false;
                 if (emailStatus === 'sent') {
-                    emailBadge = `<span class="badge status-delivered">Sent</span>`;
+                    emailBadge = `<span class="badge status-sent">Sent</span>`;
                 } else if (emailStatus === 'failed') {
                     emailBadge = `<span class="badge status-failed">Failed</span>`;
                     showEmailButton = true;
@@ -229,9 +229,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>
                     <td>${apptTimeOnly}</td>
                     <td>${msg.Phone || '-'}</td>
-                    <td>${msg.ChannelUsed || 'SMS'}</td>
                     <td>${emailBadge}</td>
                     <td>${statusBadge}</td>
+                    <td>${msg.ChannelUsed || 'SMS'}</td>
                     <td>${formatDate(msg.SentAt)}</td>
                 `;
                 tbody.appendChild(tr);

@@ -308,6 +308,7 @@ SELECT
     p.FirstName AS PatientFirstName,
     p.LastName AS PatientLastName,
     p.Email,
+    p.Sex,
     l.LabName,
     l.LabAddress
 FROM dbo.Appointments a
@@ -594,6 +595,7 @@ SELECT
     p.FirstName AS PatientFirstName,
     p.LastName AS PatientLastName,
     p.Email,
+    p.Sex,
     l.LabName,
     l.LabAddress
 FROM dbo.Appointments a

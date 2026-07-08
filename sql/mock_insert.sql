@@ -77,12 +77,12 @@ GO
 -- ============================================================================
 MERGE [dbo].[DEMOG] AS target
 USING (VALUES
-    (728314, N'ΑΝΔΡΕΣΑΚΗ',    N'ΜΑΡΙΑ',      N'6970668784', N'georgekon1@hotmail.gr', 'F'),
+    (728314, N'ΑΝΔΡΕΣΑΚΗ',    N'ΜΑΡΙΑ',      N'6970668784', N'=georgekon12@gmail.com', 'F'),
     (827598, N'ΓΕΩΡΓΙΟΥ',     N'ΑΣΗΜΕΝΙΑ',   N'6970668784', NULL,                       'F'),
     (576903, N'ΜΟΥΓΚΑΡΑΚΗΣ', N'ΠΑΝΑΓΙΩΤΗΣ', N'6970668784', NULL,                       'M'),
     (260603, N'ΚΑΒΑΛΗ',       N'ΙΩΑΝΝΑ',     N'6970668784', N'georgekon12@gmail.com',  'F'),
-    (344423, N'ΚΑΡΑΜΟΥΤΣΙΟΣ',N'ΔΗΜΗΤΡΙΟΣ',  N'6970668784', N'georgios.konstantopoulos@best-eu.org',   'M'),
-    (311678, N'ΚΑΤΣΟΥΛΑ',     N'ΠΑΡΑΣΚΕΥΗ',  N'6970668784', N'el22104@mail.ntua.gr',     'F')
+    (344423, N'ΚΑΡΑΜΟΥΤΣΙΟΣ',N'ΔΗΜΗΤΡΙΟΣ',  N'6970668784', N'georgekon12@gmail.com',   'M'),
+    (311678, N'ΚΑΤΣΟΥΛΑ',     N'ΠΑΡΑΣΚΕΥΗ',  N'6970668784', N'georgekon12@gmail.com',     'F')
 ) AS source ([DEMOGID], [LNAME], [FNAME], [MOBILE], [EMAIL], [SEX])
 ON target.[DEMOGID] = source.[DEMOGID]
 WHEN MATCHED THEN
@@ -140,7 +140,8 @@ USING (VALUES
     (3000010, CAST('2026-07-02 10:00:00' AS DATETIME), CAST('2026-07-02 10:30:00' AS DATETIME), 19, NULL, 576903, 0, NULL),
     (3000011, CAST('2026-07-03 11:00:00' AS DATETIME), CAST('2026-07-03 11:30:00' AS DATETIME), 24, NULL, 311678, 0, NULL),
     (3000012, CAST('2026-07-15 09:00:00' AS DATETIME), CAST('2026-07-15 09:30:00' AS DATETIME), 77, NULL, 827598, 0, NULL),
-    (3000013, CAST('2026-07-16 12:00:00' AS DATETIME), CAST('2026-07-16 12:30:00' AS DATETIME), 32, NULL, 728314, 0, NULL)
+    (3000013, CAST('2026-07-16 12:00:00' AS DATETIME), CAST('2026-07-16 12:30:00' AS DATETIME), 32, NULL, 728314, 0, NULL),
+    (3000014, CAST('2026-07-09 16:20:00' AS DATETIME), CAST('2026-07-16 16:30:00' AS DATETIME), 32, NULL, 260603, 0, NULL)
 ) AS source ([SCHEDULERDATAID], [START], [FINISH], [RESOURCEID], [MESSAGE], [DEMOGID], [DELETED], [WARDID])
 ON target.[SCHEDULERDATAID] = source.[SCHEDULERDATAID]
 WHEN MATCHED THEN
@@ -175,7 +176,8 @@ USING (VALUES
     (3000010, N'ΑΞ ΤΟΜΟ ΘΩΡΑΚΟΣ'),
     (3000011, N'ΥΠ ΑΝΩ ΚΟΙΛΙΑΣ'),
     (3000012, N'MRI ΟΜΣΣ'),
-    (3000013, N'ΥΠ ΜΑΣΤΩΝ')
+    (3000013, N'ΥΠ ΜΑΣΤΩΝ'),
+    (3000014, N'ΥΠ ΑΝΩ ΚΟΙΛΙΑΣ')
 ) AS source ([SCHEDULERDATAID], [EXAMSTRCODE])
 ON target.[SCHEDULERDATAID] = source.[SCHEDULERDATAID] AND target.[EXAMSTRCODE] = source.[EXAMSTRCODE]
 WHEN NOT MATCHED THEN

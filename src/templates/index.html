@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KosmoSMS Dashboard</title>
+    <title>KosmoReminder Dashboard</title>
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,9 +20,9 @@
         <!-- Sidebar or Header -->
         <header class="top-nav glass-panel">
             <div class="logo">
-                <img src="/static/images/KosmoSMS Logo.png" alt="KosmoSMS Logo"
+                <img src="/static/images/KosmoReminder_Logo.png" alt="KosmoReminder Logo"
                     style="height: 32px; width: auto; filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5));">
-                <h1>KosmoSMS</h1>
+                <h1>KosmoReminder</h1>
             </div>
             <div class="user-info">
                 <span>Dashboard</span>
@@ -86,9 +86,9 @@
                                 <th>Patient</th>
                                 <th>Time</th>
                                 <th>Phone</th>
-                                <th>Channel</th>
                                 <th>Email Status</th>
-                                <th>Status</th>
+                                <th>SMS Status</th>
+                                <th>Channel</th>
                                 <th>Sent At</th>
                             </tr>
                         </thead>
@@ -102,12 +102,15 @@
                         </tbody>
                     </table>
                 </div>
-                
+
                 <!-- Pagination Controls -->
-                <div class="pagination-container" id="pagination-controls" style="display: none; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; padding: 1rem 0;">
-                    <button id="page-prev" class="btn-refresh" style="min-width: 100px;"><i class="ph ph-caret-left"></i> Prev Week</button>
+                <div class="pagination-container" id="pagination-controls"
+                    style="display: none; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; padding: 1rem 0;">
+                    <button id="page-prev" class="btn-refresh" style="min-width: 100px;"><i
+                            class="ph ph-caret-left"></i> Prev Week</button>
                     <span id="page-info" style="font-weight: 500;">Select Week</span>
-                    <button id="page-next" class="btn-refresh" style="min-width: 100px;">Next Week <i class="ph ph-caret-right"></i></button>
+                    <button id="page-next" class="btn-refresh" style="min-width: 100px;">Next Week <i
+                            class="ph ph-caret-right"></i></button>
                 </div>
             </section>
         </main>

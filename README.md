@@ -2,7 +2,9 @@
 
 SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. Syncs appointments from **Infomed Slis**, sends automated reminders via the **easysms.gr** API, and provides a desktop dashboard to monitor the status.
 
----
+<p align="center">
+  <img src="src/logo/KosmoSMS%20Logo.png" width="300" alt="KosmoSMS Logo" />
+</p>
 
 ## Architecture Overview
 
