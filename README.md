@@ -1,9 +1,9 @@
-# KosmoSMS — Appointment Reminder System & Dashboard
+# KosmoReminder — Appointment Reminder System & Dashboard
 
 SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. Syncs appointments from **Infomed Slis**, sends automated reminders via the **easysms.gr** API, and provides a desktop dashboard to monitor the status.
 
 <p align="center">
-  <img src="src/logo/KosmoSMS%20Logo.png" width="300" alt="KosmoSMS Logo" />
+  <img src="src/logo/KosmoReminder_Logo.png" width="300" alt="KosmoReminder Logo" />
 </p>
 
 ## Architecture Overview
@@ -17,7 +17,7 @@ SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. 
                      │ (every 5-15 min)
                      ▼
               ┌─────────────┐
-              │ KosmoSMS DB │  ◄── Your own MS SQL Server
+              │ KosmoReminder DB │  ◄── Your own MS SQL Server
               │ (6 tables)  │
               └──┬───────┬──┘
                  │       │
@@ -33,10 +33,10 @@ SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. 
 │ every 15 min   │          │ every 5 min    │          │ /api/sms-callback  │
 └───────┬────────┘          └────────┬───────┘          └─────────▲───┬──────┘
         │                            │                            │   │
-        │  HTTP calls                │ SMTP (Email)               │   │ serves UI
+        │  HTTP calls                │ Resend API                 │   │ serves UI
         ▼                            ▼                            │   ▼
 ┌───────────────┐           ┌────────────────┐                    │ ┌──────────────────┐
-│ easysms.gr    │───────────┤ SMTP Server    │────────────────────┘ │ KosmoSMS         │
+│ easysms.gr    │───────────┤ Resend.com     │────────────────────┘ │ KosmoReminder         │
 │ API           │ delivery  │                │                      │ Dashboard (exe)  │
 │ (Viber + SMS) │ report    └────────────────┘                      │                  │
 └───────────────┘                                                   └──────────────────┘
@@ -60,7 +60,7 @@ SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. 
 
 - **Python 3.10+** — [Download](https://www.python.org/downloads/)
 - **Microsoft ODBC Driver for SQL Server** — [Download](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
-- **MS SQL Server** — Your own instance for the KosmoSMS database
+- **MS SQL Server** — Your own instance for the KosmoReminder database
 - **easysms.gr account** — [Sign up](https://easysms.gr/app/sign-up)
 
 ---
@@ -109,7 +109,7 @@ cd ..
 Edit `src/.env` with your actual values:
 
 ```ini
-DB_CONNECTION_STRING=DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=KosmoSMS;Trusted_Connection=yes;
+DB_CONNECTION_STRING=DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=KosmoReminder;Trusted_Connection=yes;
 EASYSMS_API_KEY=your_api_key_here
 CALLBACK_URL=https://your-public-domain.com/api/sms-callback
 ```
@@ -131,7 +131,7 @@ build.bat
 ```bash
 run.bat
 ```
-*(This launches the generated `KosmoSMS_Dashboard.exe` viewer. The backend services will continue running even if the UI is closed).*
+*(This launches the generated `KosmoReminder_Dashboard.exe` viewer. The backend services will continue running even if the UI is closed).*
 
 > **[TODO: Add screenshots of the new paginated Dashboard UI here]**
 
@@ -145,7 +145,7 @@ All settings are in `src/.env` (loaded by `config.py`):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DB_CONNECTION_STRING` | ODBC connection string to KosmoSMS database | `DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=KosmoSMS;Trusted_Connection=yes;` |
+| `DB_CONNECTION_STRING` | ODBC connection string to KosmoReminder database | `DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=KosmoReminder;Trusted_Connection=yes;` |
 
 ### easysms.gr API
 
@@ -169,8 +169,8 @@ All settings are in `src/.env` (loaded by `config.py`):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `SMTP_HOST` | SMTP Server Host | *(empty)* |
-| `SMTP_PORT` | SMTP Server Port | `587` |
+| `SMTP_HOST` | Resend.com  Host | *(empty)* |
+| `SMTP_PORT` | Resend.com  Port | `587` |
 | `SMTP_USER` | SMTP Username | *(empty)* |
 | `SMTP_PASSWORD` | SMTP Password | *(empty)* |
 | `SMTP_USE_TLS` | Use TLS for SMTP connection | `true` |
@@ -242,7 +242,7 @@ Serves the HTML dashboard on `http://localhost:5000/` and provides API endpoints
 
 ### 5. Desktop Client (`desktop_client.py` / `start_app.py`)
 
-Provides a unified interface to the user. Since the backend now runs reliably via Windows Services (NSSM), `start_app.py` simply launches `KosmoSMS_Dashboard.exe`. This executable opens a pywebview window pointing directly to the locally hosted dashboard (`http://localhost:5000/`), offering a native app feel.
+Provides a unified interface to the user. Since the backend now runs reliably via Windows Services (NSSM), `start_app.py` simply launches `KosmoReminder_Dashboard.exe`. This executable opens a pywebview window pointing directly to the locally hosted dashboard (`http://localhost:5000/`), offering a native app feel.
 
 ---
 
@@ -255,6 +255,6 @@ PlantUML diagrams are in the `puml/` directory:
 | `architecture.puml` | High-level system architecture |
 | `erd.puml` | Database entity-relationship diagram |
 | `reminder_sequence.puml` | Reminder send and delivery confirmation flow |
-| `sync_sequence.puml` | Slis-to-KosmoSMS sync flow |
+| `sync_sequence.puml` | Slis-to-KosmoReminder sync flow |
 
 Render them with any PlantUML viewer, IDE plugin, or [plantuml.com](https://www.plantuml.com/).
