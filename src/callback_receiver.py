@@ -121,11 +121,13 @@ def dashboard_messages():
                 "AppointmentDateTime": d.get("AppointmentDateTime").isoformat() if d.get("AppointmentDateTime") else None,
                 "Cost": None,
                 "EmailStatus": d.get("EmailStatus"),
+                "EmailAddress": d.get("Email", ""),
                 "AppointmentIDs": d.get("AppointmentIDs")
             })
             
         for n in notifs:
             n["AppointmentIDs"] = str(n.get("AppointmentID", ""))
+            n["EmailAddress"] = n.get("Email", "")
         messages.extend(notifs)
         
         # Sort combined results by AppointmentDateTime ascending

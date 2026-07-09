@@ -4,7 +4,22 @@ SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. 
 
 <p align="center">
   <img src="src/logo/KosmoReminder_Logo.png" width="300" alt="KosmoReminder Logo" />
+  <img src="media/logo_transparent_crop.png" width="300" alt="Kosmoiatriki Logo" />
 </p>
+
+## Notification Previews
+
+### SMS & Viber Reminder
+Patients receive an automated, personalized text message with their appointment details:
+
+> **ΚΟΣΜΟΙΑΤΡΙΚΗ:** Σας υπενθυμίζουμε το ραντεβού σας στο **ΑΞΟΝΙΚΟΥ** της Μονάδας **ΣΕΠΟΛΙΩΝ** (Σεπολίων 1, Αθήνα) είναι προγραμματισμένο για την **Δευτέρα 10/10** και ώρα **10:30**.
+
+### Email Calendar Invite
+If an email address is provided, patients also receive a beautifully formatted email containing:
+- A `.ics` attachment to automatically add the appointment to Google Calendar, Apple Calendar, or Outlook.
+- A Google Maps link to the specific laboratory branch.
+
+*(See the [Screenshots](#screenshots) section below for a visual preview of the email).*
 
 ## Architecture Overview
 
@@ -36,7 +51,7 @@ SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. 
         │  HTTP calls                │ Resend API                 │   │ serves UI
         ▼                            ▼                            │   ▼
 ┌───────────────┐           ┌────────────────┐                    │ ┌──────────────────┐
-│ easysms.gr    │───────────┤ Resend.com     │────────────────────┘ │ KosmoReminder         │
+│ easysms.gr    │───────────┤ Resend.com     │────────────────────┘ │ KosmoReminder    │
 │ API           │ delivery  │                │                      │ Dashboard (exe)  │
 │ (Viber + SMS) │ report    └────────────────┘                      │                  │
 └───────────────┘                                                   └──────────────────┘
@@ -73,14 +88,17 @@ Run the SQL scripts on your MS SQL Server in order:
 
 ```sql
 -- Run in SQL Server Management Studio (SSMS)
--- 1. Create database and tables
-sql/001_CreateDatabase.sql
+-- 1. Create the KosmoSMS database, tables, and seed data
+sql/init.sql
 
 -- 2. Configure Linked Server to Slis (fill in your Slis server details)
-sql/002_LinkedServerSetup.sql
+sql/link.sql
 
--- 3. Create the sync stored procedure and Agent job
-sql/003_SyncStoredProcedure.sql
+-- 3. Create the sync stored procedure (DepartmentMap + usp_SyncAppointmentsFromSlis)
+sql/sync.sql
+
+-- 4. Add EmailStatus column to Appointments (required for email reminders)
+sql/email_support.sql
 ```
 
 ### 2. Set up Python
@@ -106,12 +124,19 @@ copy .env.example .env      # Windows
 cd ..
 ```
 
-Edit `src/.env` with your actual values:
+Edit `src/.env` with your actual values (see `src/.env.example` for the full list):
 
 ```ini
-DB_CONNECTION_STRING=DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=KosmoReminder;Trusted_Connection=yes;
+# Database
+DB_CONNECTION_STRING=DRIVER={ODBC Driver 17 for SQL Server};SERVER=localhost;DATABASE=KosmoSMS;Trusted_Connection=yes;
+
+# SMS/Viber
 EASYSMS_API_KEY=your_api_key_here
 CALLBACK_URL=https://your-public-domain.com/api/sms-callback
+
+# Email (Resend)
+RESEND_API_KEY=your_resend_api_key_here
+EMAIL_FROM_ADDRESS=noreply@kosmoiatriki.gr
 ```
 
 ### 4. Build and Run
@@ -125,15 +150,13 @@ build.bat
 ```powershell
 .\install_services.ps1
 ```
-*(This will download NSSM and install `reminder_service.py` and `callback_receiver.py` as auto-restarting Windows Services).*
+*(This will download NSSM and install `reminder_service.py`, `callback_receiver.py` and `email_reminder_service.py` as auto-restarting Windows Services).*
 
 3. Run the Dashboard UI:
 ```bash
 run.bat
 ```
 *(This launches the generated `KosmoReminder_Dashboard.exe` viewer. The backend services will continue running even if the UI is closed).*
-
-> **[TODO: Add screenshots of the new paginated Dashboard UI here]**
 
 ---
 
@@ -185,17 +208,6 @@ All settings are in `src/.env` (loaded by `config.py`):
 |----------|-------------|---------|
 | `CALLBACK_HOST` | Flask listen host | `0.0.0.0` |
 | `CALLBACK_PORT` | Flask listen port | `5000` |
-
----
-
-## Secrets Management
-
-> **Never commit secrets to git!** The `.gitignore` file excludes `.env`.
-
-For production, consider:
-- **Environment variables** on the server
-- **Windows DPAPI** or a secrets manager
-- For development: keep secrets in `.env` (gitignored)
 
 ---
 
@@ -258,3 +270,17 @@ PlantUML diagrams are in the `puml/` directory:
 | `sync_sequence.puml` | Slis-to-KosmoReminder sync flow |
 
 Render them with any PlantUML viewer, IDE plugin, or [plantuml.com](https://www.plantuml.com/).
+
+---
+
+## Screenshots
+
+| Screenshot | Preview | Description |
+|---|---|---|
+| **Dashboard Home** | ![Dashboard Home](media/dashboard_home.png) | Main dashboard showing upcoming appointments and their SMS/Email reminder status. |
+| **Tomorrow's Appointments** | ![Tomorrow's Appointments](media/tomorrow.png) | View appointments scheduled for tomorrow and their reminder status. |
+| **Status Filter** | ![Status Filter](media/status_filter.png) | Filtering appointments by their reminder status. |
+| **Channel Filter** | ![Channel Filter](media/channel_filter.png) | Filtering appointments by notification channel (SMS, Viber, Email). |
+| **Email Preview 1** | ![Email Preview 1](media/email_1.png) | Email Sent to patient (1) |
+| **Email Preview 2** | ![Email Preview 2](media/email_2.png) | Email Sent to patient (2) |
+| **Calendar Invite** | ![Calendar Invite](media/calendar_invite.png) | Calendar invite (.ics) included in the email. |

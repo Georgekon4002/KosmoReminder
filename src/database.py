@@ -419,7 +419,8 @@ SELECT
     a.EmailStatus,
     p.FirstName,
     p.LastName,
-    p.Phone
+    p.Phone,
+    p.Email
 FROM dbo.Notifications n
 LEFT JOIN dbo.Appointments a ON n.AppointmentID = a.AppointmentID
 LEFT JOIN dbo.Patients p ON a.PatientID = p.PatientID
@@ -443,7 +444,8 @@ SELECT
     a.EmailStatus,
     p.FirstName,
     p.LastName,
-    p.Phone
+    p.Phone,
+    p.Email
 FROM dbo.Notifications n
 LEFT JOIN dbo.Appointments a ON n.AppointmentID = a.AppointmentID
 LEFT JOIN dbo.Patients p ON a.PatientID = p.PatientID

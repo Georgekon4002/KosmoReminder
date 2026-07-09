@@ -33,19 +33,14 @@
         </header>
 
         <main class="main-content">
-            <!-- Tab Navigation -->
-            <div class="tabs-container">
-                <button class="tab-btn active" data-mode="all-time">All Time</button>
-                <button class="tab-btn" data-mode="today">Today</button>
-            </div>
-
-            <!-- Stats Grid -->
+            <!-- Stats Section -->
+            <h2 class="section-title">SMS Statistics</h2>
             <section class="stats-grid" id="stats-section">
-                <div class="stat-card glass-panel fade-in" style="--delay: 0.1s" id="card-total">
-                    <div class="stat-icon purple"><i class="ph ph-hash"></i></div>
+                <div class="stat-card glass-panel fade-in" style="--delay: 0.1s">
+                    <div class="stat-icon green"><i class="ph ph-check-circle"></i></div>
                     <div class="stat-info">
-                        <h3 id="stat-total-title">Total Processed</h3>
-                        <p id="stat-total" class="stat-value">--</p>
+                        <h3>Delivered</h3>
+                        <p id="stat-delivered" class="stat-value">--</p>
                     </div>
                 </div>
                 <div class="stat-card glass-panel fade-in" style="--delay: 0.2s">
@@ -56,16 +51,16 @@
                     </div>
                 </div>
                 <div class="stat-card glass-panel fade-in" style="--delay: 0.3s">
-                    <div class="stat-icon green"><i class="ph ph-check-circle"></i></div>
+                    <div class="stat-icon orange"><i class="ph ph-clock"></i></div>
                     <div class="stat-info">
-                        <h3>Delivered</h3>
-                        <p id="stat-delivered" class="stat-value">--</p>
+                        <h3>Pending</h3>
+                        <p id="stat-pending" class="stat-value">--</p>
                     </div>
                 </div>
                 <div class="stat-card glass-panel fade-in" style="--delay: 0.4s">
                     <div class="stat-icon red"><i class="ph ph-warning-circle"></i></div>
                     <div class="stat-info">
-                        <h3>Failed / Rejected</h3>
+                        <h3>Failed</h3>
                         <p id="stat-failed" class="stat-value">--</p>
                     </div>
                 </div>
@@ -79,23 +74,99 @@
                         <i class="ph ph-arrows-clockwise"></i> Refresh
                     </button>
                 </div>
+
+                <!-- Search & Filters -->
+                <div class="filters-container">
+                    <div class="search-box">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" id="search-input" placeholder="Search">
+                    </div>
+                    <div class="filter-controls">
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filter-tomorrow">
+                            <span>Tomorrow's Appointments</span>
+                        </label>
+
+                        <!-- Channel Dropdown -->
+                        <div class="dropdown-filter" id="channel-dropdown">
+                            <button class="dropdown-trigger" id="channel-trigger">
+                                <i class="ph ph-funnel"></i>
+                                <span id="channel-label">Channel</span>
+                                <i class="ph ph-caret-down dropdown-caret"></i>
+                            </button>
+                            <div class="dropdown-panel" id="channel-panel">
+                                <label class="dropdown-option">
+                                    <input type="checkbox" name="channel" value="SMS" id="ch-sms">
+                                    <span>📱 SMS</span>
+                                </label>
+                                <label class="dropdown-option">
+                                    <input type="checkbox" name="channel" value="Viber" id="ch-viber">
+                                    <span>💬 Viber</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Status Dropdown -->
+                        <div class="dropdown-filter" id="status-dropdown">
+                            <button class="dropdown-trigger" id="status-trigger">
+                                <i class="ph ph-sliders"></i>
+                                <span id="status-label">Status</span>
+                                <i class="ph ph-caret-down dropdown-caret"></i>
+                            </button>
+                            <div class="dropdown-panel" id="status-panel">
+                                <div class="dropdown-group-label">📧 Email</div>
+                                <label class="dropdown-option">
+                                    <input type="checkbox" name="status" value="sent_mail" id="st-sent-mail">
+                                    <span>Sent</span>
+                                </label>
+                                <label class="dropdown-option">
+                                    <input type="checkbox" name="status" value="pending_mail" id="st-pending-mail">
+                                    <span>Pending</span>
+                                </label>
+                                <label class="dropdown-option">
+                                    <input type="checkbox" name="status" value="failed_mail" id="st-failed-mail">
+                                    <span>Failed</span>
+                                </label>
+                                <div class="dropdown-divider"></div>
+                                <div class="dropdown-group-label">💬 SMS</div>
+                                <label class="dropdown-option">
+                                    <input type="checkbox" name="status" value="sent_sms" id="st-sent-sms">
+                                    <span>Sent</span>
+                                </label>
+                                <label class="dropdown-option">
+                                    <input type="checkbox" name="status" value="delivered_sms" id="st-delivered-sms">
+                                    <span>Delivered</span>
+                                </label>
+                                <label class="dropdown-option">
+                                    <input type="checkbox" name="status" value="pending_sms" id="st-pending-sms">
+                                    <span>Pending</span>
+                                </label>
+                                <label class="dropdown-option">
+                                    <input type="checkbox" name="status" value="failed_sms" id="st-failed-sms">
+                                    <span>Failed</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Patient</th>
                                 <th>Time</th>
-                                <th>Phone</th>
-                                <th>Email Status</th>
+                                <th class="col-sep-left">Phone</th>
                                 <th>SMS Status</th>
                                 <th>Channel</th>
                                 <th>Sent At</th>
+                                <th class="col-sep-left">Email Address</th>
+                                <th>Email Status</th>
                             </tr>
                         </thead>
                         <tbody id="messages-tbody">
                             <!-- Rows will be populated by JS -->
                             <tr>
-                                <td colspan="7" class="loading-state">
+                                <td colspan="8" class="loading-state">
                                     <i class="ph ph-spinner-gap spin"></i> Loading data...
                                 </td>
                             </tr>
