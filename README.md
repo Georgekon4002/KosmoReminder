@@ -17,7 +17,7 @@ SMS/Viber reminder system and Dashboard for **Kosmoiatriki** diagnostic center. 
                      │ (every 5-15 min)
                      ▼
               ┌─────────────┐
-              │ KosmoReminder DB │  ◄── Your own MS SQL Server
+              │ KosmoSMS DB │  ◄── Your own MS SQL Server
               │ (6 tables)  │
               └──┬───────┬──┘
                  │       │
