@@ -28,6 +28,7 @@ appsettings.Development.json
 appsettings.*.local.json
 *.pfx
 *.key
+noreply.txt
 
 ## Logs
 logs/
