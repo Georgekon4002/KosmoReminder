@@ -4,5 +4,4 @@ requests==2.*
 python-dotenv==1.*
 
 icalendar
-resend
 pyinstaller

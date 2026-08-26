@@ -3,13 +3,19 @@ KosmoSMS — Email Reminder Service
 
 Background script that periodically checks for newly synced appointments
 and sends a one-time email with a calendar invite (.ics).
+
+Sends via SMTP (standard library smtplib) — no third-party email SDK required.
 """
 
 import logging
+import os
+import smtplib
 import sys
 import time
-import resend
-import uuid
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import database
 import calendar_invite
@@ -19,7 +25,6 @@ from reminder_service import build_greeting
 # ---------------------------------------------------------------------------
 # Logging setup
 # ---------------------------------------------------------------------------
-import os
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -34,14 +39,17 @@ logger = logging.getLogger("email_reminder_service")
 months_gr = ["", "Ιανουαρίου", "Φεβρουαρίου", "Μαρτίου", "Απριλίου", "Μαΐου", "Ιουνίου", "Ιουλίου", "Αυγούστου", "Σεπτεμβρίου", "Οκτωβρίου", "Νοεμβρίου", "Δεκεμβρίου"]
 days_gr = ["Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο", "Κυριακή"]
 
-def send_email(appointment: dict) -> bool:
-    """Send calendar invite email using Resend. Returns True on success, False on failure."""
+
+def _build_smtp_message(appointment: dict) -> tuple[MIMEMultipart, str] | tuple[None, None]:
+    """
+    Build a MIMEMultipart email message for the given appointment.
+
+    Returns (msg, recipient_address) or (None, None) if no email on file.
+    """
     patient_email = appointment.get("Email")
     if not patient_email:
-        return False
-        
-    resend.api_key = cfg.RESEND_API_KEY
-        
+        return None, None
+
     try:
         appt_dt = appointment.get("AppointmentDateTime")
         if appt_dt:
@@ -52,19 +60,23 @@ def send_email(appointment: dict) -> bool:
         else:
             dt_str = ""
             subject_dt_str = ""
-            
+
         department = appointment.get("Department") or "Τμήμα"
-        subject = cfg.EMAIL_CONFIRMATION_SUBJECT_TEMPLATE.replace("{DateTime}", subject_dt_str).replace("{Department}", department)
-        
+        subject = (
+            cfg.EMAIL_CONFIRMATION_SUBJECT_TEMPLATE
+            .replace("{DateTime}", subject_dt_str)
+            .replace("{Department}", department)
+        )
+
         lab_name = appointment.get("LabName") or "το εργαστήριο μας"
-        
+
         first_name = appointment.get("PatientFirstName", "")
-        last_name = appointment.get("PatientLastName", "")
-        sex = appointment.get("Sex")
-        greeting = build_greeting(first_name, last_name, sex)
-        
+        last_name  = appointment.get("PatientLastName", "")
+        sex        = appointment.get("Sex")
+        greeting   = build_greeting(first_name, last_name, sex)
+
         lab_address_db = appointment.get("LabAddress") or "Αθήνα"
-        
+
         # Build map link and address
         if "Κυψέλη" in lab_name:
             directions_url = "https://maps.app.goo.gl/9QZJ2qH9n9w3XQ9E8"
@@ -87,61 +99,94 @@ def send_email(appointment: dict) -> bool:
             from datetime import timedelta
             gcal_start = appt_dt.strftime("%Y%m%dT%H%M%S")
             gcal_end = (appt_dt + timedelta(minutes=30)).strftime("%Y%m%dT%H%M%S")
-            calendar_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={gcal_title}&dates={gcal_start}/{gcal_end}&details=&location={urllib.parse.quote(lab_name)}"
+            calendar_url = (
+                f"https://calendar.google.com/calendar/render?action=TEMPLATE"
+                f"&text={gcal_title}&dates={gcal_start}/{gcal_end}"
+                f"&details=&location={urllib.parse.quote(lab_name)}"
+            )
         else:
             calendar_url = "#"
-        
-        # Build .ics attachment
-        ics_data = calendar_invite.build_ics(appointment)
-        attachments = [
-            {
-                "filename": "invite.ics",
-                "content": list(ics_data) # Resend accepts list of integers for bytes
-            }
-        ]
-        
-        params = {
-            "from": f"{cfg.EMAIL_FROM_NAME} <{cfg.EMAIL_FROM_ADDRESS}>",
-            "to": patient_email,
-            "subject": subject,
-            "attachments": attachments
-        }
-        
-        if cfg.RESEND_TEMPLATE_ID:
-            params["template"] = {
-                "id": cfg.RESEND_TEMPLATE_ID,
-                "variables": {
-                    "greeting": greeting,
-                    "exam_type": department,
-                    "datetime": dt_str,
-                    "lab_name": lab_name,
-                    "lab_address": lab_address,
-                    "directions_url": directions_url,
-                    "calendar_url": calendar_url
-                }
-            }
-        else:
-            template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "mail.html")
-            with open(template_path, "r", encoding="utf-8") as f:
-                body_html = f.read()
-            
-            body_html = body_html.replace("{{{greeting}}}", greeting)
-            body_html = body_html.replace("{{{exam_type}}}", department)
-            body_html = body_html.replace("{{{datetime}}}", dt_str)
-            body_html = body_html.replace("{{{lab_name}}}", lab_name)
-            body_html = body_html.replace("{{{lab_address}}}", lab_address)
-            body_html = body_html.replace("{{{directions_url}}}", directions_url)
-            body_html = body_html.replace("{{{calendar_url}}}", calendar_url)
-            
-            params["html"] = body_html
 
-        email_response = resend.Emails.send(params)
-        logger.info("Email sent via Resend. ID: %s", email_response.get("id"))
-                
-        return True
+        # Load and fill HTML template
+        template_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "templates", "mail.html"
+        )
+        with open(template_path, "r", encoding="utf-8") as f:
+            body_html = f.read()
+
+        body_html = body_html.replace("{{{greeting}}}", greeting)
+        body_html = body_html.replace("{{{exam_type}}}", department)
+        body_html = body_html.replace("{{{datetime}}}", dt_str)
+        body_html = body_html.replace("{{{lab_name}}}", lab_name)
+        body_html = body_html.replace("{{{lab_address}}}", lab_address)
+        body_html = body_html.replace("{{{directions_url}}}", directions_url)
+        body_html = body_html.replace("{{{calendar_url}}}", calendar_url)
+
+        # Build .ics attachment
+        ics_data: bytes = calendar_invite.build_ics(appointment)
+
+        # Assemble MIME message
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject
+        msg["From"] = f"{cfg.EMAIL_FROM_NAME} <{cfg.EMAIL_FROM_ADDRESS}>"
+        msg["To"] = patient_email
+
+        # HTML body
+        msg.attach(MIMEText(body_html, "html", "utf-8"))
+
+        # .ics attachment
+        ics_part = MIMEBase("text", "calendar", method="REQUEST", name="invite.ics")
+        ics_part.set_payload(ics_data)
+        encoders.encode_base64(ics_part)
+        ics_part.add_header("Content-Disposition", "attachment", filename="invite.ics")
+        msg.attach(ics_part)
+
+        return msg, patient_email
+
     except Exception:
-        logger.exception("Failed to send email to %s for appointment %s", patient_email, appointment.get("AppointmentID"))
+        logger.exception(
+            "Failed to build email message for appointment %s",
+            appointment.get("AppointmentID"),
+        )
+        return None, None
+
+
+def send_email(appointment: dict) -> bool:
+    """Send calendar invite email via SMTP. Returns True on success, False on failure."""
+    msg, recipient = _build_smtp_message(appointment)
+    if msg is None:
         return False
+
+    try:
+        if cfg.SMTP_USE_TLS:
+            smtp = smtplib.SMTP(cfg.SMTP_HOST, cfg.SMTP_PORT, timeout=30)
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+        else:
+            smtp = smtplib.SMTP_SSL(cfg.SMTP_HOST, cfg.SMTP_PORT, timeout=30)
+
+        if cfg.SMTP_USER and cfg.SMTP_PASSWORD:
+            smtp.login(cfg.SMTP_USER, cfg.SMTP_PASSWORD)
+
+        smtp.sendmail(cfg.EMAIL_FROM_ADDRESS, recipient, msg.as_string())
+        smtp.quit()
+
+        logger.info(
+            "Email sent via SMTP to %s for appointment %s",
+            recipient,
+            appointment.get("AppointmentID"),
+        )
+        return True
+
+    except Exception:
+        logger.exception(
+            "Failed to send email to %s for appointment %s",
+            recipient,
+            appointment.get("AppointmentID"),
+        )
+        return False
+
 
 def process_emails() -> None:
     """Find newly synced appointments without email sent, and send them."""
@@ -160,15 +205,15 @@ def process_emails() -> None:
     for appt in appointments:
         appt_id = appt.get("AppointmentID")
         email = appt.get("Email")
-        
+
         if not email or not str(email).strip():
             logger.info("Appointment %d: no email on file", appt_id)
             database.update_email_status(appt_id, "no_email")
             continue
-            
+
         logger.info("Sending email for appointment %d to %s", appt_id, email)
         success = send_email(appt)
-        
+
         if success:
             logger.info("Email sent successfully for appointment %d", appt_id)
             database.update_email_status(appt_id, "sent")
@@ -176,11 +221,12 @@ def process_emails() -> None:
             logger.error("Email failed for appointment %d", appt_id)
             database.update_email_status(appt_id, "failed")
 
+
 def main() -> None:
-    logger.info("EmailReminderService started. Interval=5min")
-    
+    logger.info("EmailReminderService started (SMTP). Interval=5min")
+
     interval_minutes = 5
-    
+
     while True:
         try:
             process_emails()
@@ -189,6 +235,7 @@ def main() -> None:
 
         logger.debug("Sleeping for %d minutes...", interval_minutes)
         time.sleep(interval_minutes * 60)
+
 
 if __name__ == "__main__":
     main()

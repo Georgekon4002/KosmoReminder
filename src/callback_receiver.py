@@ -112,7 +112,7 @@ def dashboard_messages():
             messages.append({
                 "FirstName": d.get("PatientFirstName", ""),
                 "LastName": d.get("PatientLastName", ""),
-                "Department": d.get("Department", ""),
+                "Department": d.get("Departments") or d.get("Department", ""),
                 "Phone": d.get("Phone", ""),
                 "ExamType": d.get("ExamType", ""),
                 "ChannelUsed": d.get("PreferredChannel") or "SMS",

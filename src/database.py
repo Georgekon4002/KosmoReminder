@@ -25,10 +25,9 @@ def get_connection() -> pyodbc.Connection:
 # Queries used by reminder_service.py
 # =============================================================================
 
-# Groups appointments by patient + lab + department + appointment day.
-# A patient with same-day exams in DIFFERENT departments gets separate SMS.
-# A patient with same-day exams in the SAME department gets one SMS
-# with all exam types concatenated.
+# Groups appointments by patient + lab + appointment day (NOT by department).
+# A patient with same-day exams in multiple departments gets ONE SMS listing
+# all departments and the earliest start time.
 _SQL_DUE_APPOINTMENTS = """\
 SELECT
     STRING_AGG(a.ExamType, ', ') WITHIN GROUP (ORDER BY a.AppointmentDateTime)
@@ -36,8 +35,9 @@ SELECT
     MIN(a.AppointmentDateTime)      AS AppointmentDateTime,
     STRING_AGG(CAST(a.AppointmentID AS NVARCHAR(20)), '|')
                                     AS AppointmentIDs,
-    -- Department (normalized from SCHEDULERRESOURCESGROUP via DepartmentMap)
-    a.Department,
+    -- All departments for this patient on this day (pipe-separated)
+    STRING_AGG(a.Department, '|') WITHIN GROUP (ORDER BY a.AppointmentDateTime)
+                                    AS Departments,
     -- Patient
     p.PatientID,
     p.FirstName   AS PatientFirstName,
@@ -77,7 +77,6 @@ GROUP BY
     l.LabID,
     l.LabName,
     l.LabAddress,
-    a.Department,
     CAST(a.AppointmentDateTime AS DATE)
 ORDER BY AppointmentDateTime;
 """
@@ -90,7 +89,7 @@ def get_due_appointments(lead_time_hours: int) -> list[dict]:
     Each dict represents one SMS to send. Key fields:
       - AppointmentIDs      : pipe-delimited string of grouped appointment IDs
       - ExamType            : comma-separated list of normalized exam names
-      - Department          : patient-facing department name (e.g. 'Τμήμα Αξονικού')
+      - Departments         : pipe-delimited list of departments for this group
       - AppointmentDateTime : earliest slot (used for Day/Date/Time in SMS)
       - Sex                 : 'M' | 'F' | None — for the gendered greeting helper
     """
@@ -494,8 +493,9 @@ SELECT
     MIN(a.AppointmentDateTime)      AS AppointmentDateTime,
     STRING_AGG(CAST(a.AppointmentID AS NVARCHAR(20)), '|')
                                     AS AppointmentIDs,
-    a.Department,
-    a.EmailStatus,
+    STRING_AGG(a.Department, '|') WITHIN GROUP (ORDER BY a.AppointmentDateTime)
+                                    AS Departments,
+    MIN(a.EmailStatus)              AS EmailStatus,
     p.PatientID,
     p.FirstName   AS PatientFirstName,
     p.LastName    AS PatientLastName,
@@ -523,7 +523,7 @@ WHERE
     )
 GROUP BY
     p.PatientID, p.FirstName, p.LastName, p.Phone, p.Email, p.Sex, p.PreferredChannel,
-    l.LabID, l.LabName, l.LabAddress, a.Department, a.EmailStatus, CAST(a.AppointmentDateTime AS DATE)
+    l.LabID, l.LabName, l.LabAddress, CAST(a.AppointmentDateTime AS DATE)
 ORDER BY AppointmentDateTime;
 """
 
@@ -534,8 +534,9 @@ SELECT
     MIN(a.AppointmentDateTime)      AS AppointmentDateTime,
     STRING_AGG(CAST(a.AppointmentID AS NVARCHAR(20)), '|')
                                     AS AppointmentIDs,
-    a.Department,
-    a.EmailStatus,
+    STRING_AGG(a.Department, '|') WITHIN GROUP (ORDER BY a.AppointmentDateTime)
+                                    AS Departments,
+    MIN(a.EmailStatus)              AS EmailStatus,
     p.PatientID,
     p.FirstName   AS PatientFirstName,
     p.LastName    AS PatientLastName,
@@ -562,7 +563,7 @@ WHERE
     )
 GROUP BY
     p.PatientID, p.FirstName, p.LastName, p.Phone, p.Email, p.Sex, p.PreferredChannel,
-    l.LabID, l.LabName, l.LabAddress, a.Department, a.EmailStatus, CAST(a.AppointmentDateTime AS DATE)
+    l.LabID, l.LabName, l.LabAddress, CAST(a.AppointmentDateTime AS DATE)
 ORDER BY AppointmentDateTime;
 """
 

@@ -162,6 +162,14 @@ def build_message(group: dict) -> str:
     """
     Build the SMS reminder message for one appointment group.
 
+    When a patient has appointments in a single department, the standard
+    template is used.
+
+    When a patient has appointments across MULTIPLE departments on the same
+    day, a special multi-department message is produced:
+      "ΚΟΣΜΟΙΑΤΡΙΚΗ: Έχετε ραντεβού αύριο σε πολλαπλά τμήματα που
+       ξεκινούν στις HH:MM στη Μονάδα {LabName} ({LabAddress})."
+
     Template placeholders (defined in config.MESSAGE_TEMPLATE or .env):
       {Department}  — patient-facing department  (e.g. 'Τμήμα Αξονικού')
       {LabName}     — branch short name          (e.g. 'Πατησίων')
@@ -183,16 +191,44 @@ def build_message(group: dict) -> str:
     sex        = group.get("Sex")
     greeting   = build_greeting(first_name, last_name, sex)
 
+    lab_name    = group.get("LabName")    or "το εργαστήριο μας"
+    lab_address = group.get("LabAddress") or ""
+
+    # Resolve departments list
+    raw_depts = group.get("Departments") or group.get("Department") or ""
+    dept_list = [d.strip() for d in raw_depts.split("|") if d.strip()]
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique_depts: list[str] = []
+    for d in dept_list:
+        if d not in seen:
+            seen.add(d)
+            unique_depts.append(d)
+
+    if len(unique_depts) > 1:
+        # Multi-department: one consolidated message
+        message = (
+            f"ΚΟΣΜΟΙΑΤΡΙΚΗ: Έχετε ραντεβού αύριο σε πολλαπλά τμήματα "
+            f"που ξεκινούν στις {time_str} στη Μονάδα {lab_name}"
+        )
+        if lab_address:
+            message += f" ({lab_address})"
+        message += "."
+        return message
+
+    # Single department — use standard template
+    single_dept = unique_depts[0] if unique_depts else "Τμήμα"
+
     message = cfg.MESSAGE_TEMPLATE
-    message = message.replace("{Department}",  group.get("Department")  or "Τμήμα")
-    message = message.replace("{LabName}",     group.get("LabName")     or "το εργαστήριο μας")
-    message = message.replace("{LabAddress}",  group.get("LabAddress")  or "")
+    message = message.replace("{Department}",  single_dept)
+    message = message.replace("{LabName}",     lab_name)
+    message = message.replace("{LabAddress}",  lab_address)
     message = message.replace("{Day}",         day_name)
     message = message.replace("{Date}",        date_str)
     message = message.replace("{Time}",        time_str)
     # Extra placeholders available for custom templates
     message = message.replace("{Greeting}",    greeting)
-    message = message.replace("{ExamType}",    group.get("ExamType")    or "εξέταση")
+    message = message.replace("{ExamType}",    group.get("ExamType") or "εξέταση")
 
     # Fix grammatical article for Saturday
     message = message.replace("για την Σάββατο", "για το Σάββατο")
@@ -221,10 +257,10 @@ def send_reminder_for_group(group: dict) -> None:
     patient_label = f"{last_name} {first_name}".strip()
 
     logger.info(
-        "Processing group: patient=%s IDs=%s department=%s dt=%s",
+        "Processing group: patient=%s IDs=%s departments=%s dt=%s",
         patient_label,
         raw_ids,
-        group.get("Department"),
+        group.get("Departments") or group.get("Department"),
         group.get("AppointmentDateTime"),
     )
 

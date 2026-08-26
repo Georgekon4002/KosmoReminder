@@ -117,14 +117,6 @@ class _Config:
             "Επιβεβαίωση ραντεβού - {DateTime}",
         )
 
-    # --- Resend settings ---
-    @property
-    def RESEND_API_KEY(self) -> str:
-        return os.environ.get("RESEND_API_KEY", "")
-        
-    @property
-    def RESEND_TEMPLATE_ID(self) -> str:
-        return os.environ.get("RESEND_TEMPLATE_ID", "")
 
 
 # Singleton — import this everywhere
